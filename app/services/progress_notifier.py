@@ -60,10 +60,10 @@ def notify_front(
             files["phase"] = (None, str(phase))
             files["phase_total"] = (None, str(phase_total))
         if phase_label:
-            files["phase_label"] = (None, phase_label[:200])
+            files["phase_label"] = (None, phase_label[:500])
         if progress_label:
             files["progress_label"] = (None, progress_label[:500])
-        if status == "error" and error_message:
+        if status in ("error", "failed") and error_message:
             files["error_message"] = (None, error_message[:2000])
         if pptx_bytes:
             files["file_pptx"] = (
