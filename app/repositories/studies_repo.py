@@ -1,70 +1,55 @@
-import json
-import os
-import threading
-from pathlib import Path
-from typing import Dict
-
+from __future__ import annotations
+import logging, os
+from supabase import create_client, Client
 from app.api.schemas.common import Study
 
+logger = logging.getLogger(__name__)
+
+_SUPABASE_URL = os.environ.get("SUPABASE_URL") or "https://utwjfsomblhupghbgvgv.supabase.co"
+_SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY") or "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV0d2pmc29tYmxodXBnaGJndmd2Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MjExNTMxNSwiZXhwIjoyMDk3NjkxMzE1fQ.EwLQ1XeK3yUYh8Ld_CGeDQTA2ptfuKTzc_Phkcpfbak"
+_TABLE = "study_generated_data"
 
 class StudiesRepository:
-    def __init__(self, storage_dir: str | None = None) -> None:
-        self._store: Dict[str, Study] = {}
-        self._lock = threading.RLock()
-        env_path = os.environ.get("STELLA_STORAGE_DIR")
-        resolved = storage_dir or env_path or "storage/studies"
-        self._dir = Path(resolved)
-        self._dir.mkdir(parents=True, exist_ok=True)
-        self._load_all()
-
-    def _file(self, study_id: str) -> Path:
-        return self._dir / f"{study_id}.json"
-
-    def _load_all(self) -> None:
-        for path in self._dir.glob("*.json"):
-            try:
-                payload = json.loads(path.read_text(encoding="utf-8"))
-                study = Study.model_validate(payload)
-                self._store[study.study_id] = study
-            except Exception:
-                continue
-
-    def _persist(self, study: Study) -> None:
-        path = self._file(study.study_id)
-        payload = study.model_dump(mode="json")
-        path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    def __init__(self) -> None:
+        self._client: Client = create_client(_SUPABASE_URL, _SUPABASE_KEY)
 
     def save(self, study: Study) -> Study:
-        with self._lock:
-            self._store[study.study_id] = study
-            try:
-                self._persist(study)
-            except Exception:
-                pass
-            return study
+        row = {"study_id": str(study.study_id), "tenant_id": study.tenant_id, "status": str(getattr(study.status, "value", study.status)), "country": study.country, "data": study.model_dump(mode="json")}
+        try:
+            self._client.table(_TABLE).upsert(row, on_conflict="study_id").execute()
+        except Exception:
+            logger.exception("[studies_repo] save failed study_id=%s", study.study_id)
+            raise
+        return study
 
-    def get(self, study_id: str) -> Study | None:
-        with self._lock:
-            if study_id in self._store:
-                return self._store[study_id]
-            path = self._file(study_id)
-            if path.exists():
-                try:
-                    payload = json.loads(path.read_text(encoding="utf-8"))
-                    study = Study.model_validate(payload)
-                    self._store[study_id] = study
-                    return study
-                except Exception:
-                    return None
+    def get(self, study_id: str, tenant_id: str | None = None) -> Study | None:
+        try:
+            q = self._client.table(_TABLE).select("data").eq("study_id", str(study_id))
+            if tenant_id:
+                q = q.eq("tenant_id", tenant_id)
+            res = q.limit(1).execute()
+            if not res.data:
+                return None
+            return Study.model_validate(res.data[0]["data"])
+        except Exception:
+            logger.exception("[studies_repo] get failed study_id=%s", study_id)
             return None
 
     def all(self, tenant_id: str | None = None) -> list[Study]:
-        """Retourne toutes les études. Si tenant_id fourni, filtre par filiale."""
-        with self._lock:
-            studies = list(self._store.values())
+        try:
+            q = self._client.table(_TABLE).select("data")
             if tenant_id:
-                studies = [s for s in studies if s.tenant_id == tenant_id]
+                q = q.eq("tenant_id", tenant_id)
+            res = q.order("created_at", desc=True).execute()
+            studies = []
+            for row in res.data:
+                try:
+                    studies.append(Study.model_validate(row["data"]))
+                except Exception:
+                    logger.warning("[studies_repo] row invalide ignore: %s", row.get("study_id"))
             return studies
-
+        except Exception:
+            logger.exception("[studies_repo] all() failed")
+            return []
 
 studies_repo = StudiesRepository()
