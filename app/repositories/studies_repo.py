@@ -5,8 +5,8 @@ from app.api.schemas.common import Study
 
 logger = logging.getLogger(__name__)
 
-_SUPABASE_URL = os.environ.get("SUPABASE_URL") or "https://utwjfsomblhupghbgvgv.supabase.co"
-_SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY") or "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV0d2pmc29tYmxodXBnaGJndmd2Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MjExNTMxNSwiZXhwIjoyMDk3NjkxMzE1fQ.EwLQ1XeK3yUYh8Ld_CGeDQTA2ptfuKTzc_Phkcpfbak"
+_SUPABASE_URL: str = os.environ["SUPABASE_URL"]
+_SUPABASE_KEY: str = os.environ["SUPABASE_SERVICE_ROLE_KEY"]
 _TABLE = "study_generated_data"
 
 class StudiesRepository:
