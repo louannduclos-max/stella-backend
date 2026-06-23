@@ -54,10 +54,11 @@ def _swot_quadrants(study: Study) -> List[Dict[str, Any]]:
 
 
 def _action_steps(study: Study) -> List[Dict[str, Any]]:
+    n = study.narratives or {}
     return [
-        {"label": "30 jours", "value": FALLBACK, "trend": None},
-        {"label": "60 jours", "value": FALLBACK, "trend": None},
-        {"label": "90 jours", "value": FALLBACK, "trend": None},
+        {"label": "30 jours", "value": n.get("action_30d") or FALLBACK, "trend": None},
+        {"label": "60 jours", "value": n.get("action_60d") or FALLBACK, "trend": None},
+        {"label": "90 jours", "value": n.get("action_90d") or FALLBACK, "trend": None},
     ]
 
 
@@ -74,6 +75,7 @@ def build_slide_data_5_0(study: Study, section_id: str, expected_kpis: List[str]
         "source_label": "Source : INSEE / Stella Engine",
     }
 
+    n = study.narratives or {}
     if section_id == "cover":
         base.update({
             "hero_kpis": _hero_kpis(study, expected_kpis),
@@ -89,6 +91,13 @@ def build_slide_data_5_0(study: Study, section_id: str, expected_kpis: List[str]
     elif section_id == "verdict":
         base.update({
             "hero_kpis": _hero_kpis(study, expected_kpis),
+            "narrative_text": n.get("verdict_narrative") or "",
+        })
+    elif section_id == "executive_summary":
+        base.update({
+            "metrics": _kpi_metrics(study, expected_kpis),
+            "chart_id": section_id,
+            "narrative_text": n.get("exec_summary") or "",
         })
     elif section_id == "action_plan":
         base.update({

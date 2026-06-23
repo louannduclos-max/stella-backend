@@ -153,5 +153,8 @@ class Study(BaseModel):
     qa_results: list[QAResult] = Field(default_factory=list)
     microzones: MicroZonesSnapshot = Field(default_factory=MicroZonesSnapshot)
     verdict: VerdictEnum | None = None
+    # Sprint 4 Lot C — narratifs LLM (Gemini ou template). Clés : verdict_narrative,
+    # exec_summary, competitive_insight, action_30d/60d/90d, opportunity_text, generated_by
+    narratives: dict | None = None
     created_at: datetime
     updated_at: datetime

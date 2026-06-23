@@ -124,14 +124,25 @@ def _apply_run_style(run: Any, style: dict, is_dark_bg: bool) -> None:
 
 
 def _add_shape(slide: Any, obj: dict, css_vars: dict, is_dark_bg: bool) -> None:
-    """Ajoute un rectangle coloré (shape background)."""
+    """
+    Ajoute un rectangle coloré (shape background) + rend les children comme text boxes.
+
+    Les shapes Stella (KPI cards, hero-identity, timeline steps) contiennent des children
+    (label / value / trend / zone_name / verdict / narrative…) qui sont emboîtés dans le shape.
+    En PPTX, on les rend comme text boxes positionnés à l'intérieur du shape.
+    """
     from pptx.util import Emu as _E
     from pptx.enum.shapes import MSO_SHAPE_TYPE  # noqa: F401
 
-    left = _px(obj.get("left"))
-    top = _px(obj.get("top"))
-    width = _px(obj.get("width", 100))
-    height = _px(obj.get("height", 100))
+    left_px: int = obj.get("left") or 0
+    top_px: int = obj.get("top") or 0
+    width_px: int = obj.get("width") or 100
+    height_px: int = obj.get("height") or 100
+
+    left = _px(left_px)
+    top = _px(top_px)
+    width = _px(width_px)
+    height = _px(height_px)
 
     style = obj.get("style") or {}
     bg_color_raw = style.get("backgroundColor") or style.get("background")
@@ -154,6 +165,45 @@ def _add_shape(slide: Any, obj: dict, css_vars: dict, is_dark_bg: bool) -> None:
         shape.fill.fore_color.rgb = rgb
     else:
         shape.fill.background()
+
+    # --- Rendu des children (label / value / trend / zone_name / verdict / narrative…) ---
+    # Les children sont empilés verticalement dans les limites du shape.
+    # Chaque child produit une text box positionnée absolument dans le shape.
+    children = obj.get("children") or []
+    if children:
+        _INNER_PAD_PX = 16   # padding interne horizontal
+        _CHILD_GAP_PX = 6    # espacement vertical entre children
+
+        # Estimation de hauteur par child selon font_size
+        def _child_h(child_style: dict) -> int:
+            fs = child_style.get("font_size") or child_style.get("fontSize") or 18
+            try:
+                fs = int(float(str(fs).replace("px", "").strip()))
+            except (ValueError, TypeError):
+                fs = 18
+            return max(24, int(fs * 1.6))
+
+        # Répartition verticale : on empile les children en commençant en haut du shape
+        cursor_top_px = top_px + _INNER_PAD_PX
+        for child in children:
+            child_text = child.get("text") or ""
+            if not child_text:
+                continue
+            child_style = child.get("style") or {}
+            margin_top = child_style.get("margin_top") or 0
+            child_height_px = _child_h(child_style)
+            cursor_top_px += margin_top
+
+            child_obj = {
+                "left": left_px + _INNER_PAD_PX,
+                "top": cursor_top_px,
+                "width": width_px - 2 * _INNER_PAD_PX,
+                "height": child_height_px,
+                "text": child_text,
+                "style": child_style,
+            }
+            _add_text_box(slide, child_obj, is_dark_bg)
+            cursor_top_px += child_height_px + _CHILD_GAP_PX
 
 
 def _apply_slide_background(prs_slide: Any, background: str, css_vars: dict) -> None:

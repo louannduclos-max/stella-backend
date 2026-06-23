@@ -72,10 +72,16 @@ class StudyPipeline:
         study.sections = [self._build_section_shell(item, metrics) for item in SECTION_REGISTRY]
         _emit(study_id, phase=3, progress=50, eta=90)
 
-        # Phase 4 — Scoring (progress 75 %)
+        # Phase 4 — Scoring + narratifs LLM (progress 75 %)
         study.status = StudyStatus.SCORING
         study.scores = scoring_engine.compute_scores(metrics)
         study.verdict = verdict_engine.derive(study.scores)
+        # Sprint 4 Lot C : narratifs analytiques (Gemini si GEMINI_API_KEY, sinon template)
+        try:
+            from app.services.gemini_analyst import generate_narratives
+            study.narratives = generate_narratives(study)
+        except Exception:
+            pass  # ne jamais bloquer le pipeline sur une erreur de narrative
         _emit(study_id, phase=4, progress=75, eta=45)
 
         # Phase 5 — Génération des slides (progress 90 %)

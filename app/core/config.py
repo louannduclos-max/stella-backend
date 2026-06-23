@@ -14,6 +14,8 @@ class Settings(BaseModel):
     app_version: str = "1.7.0"
     environment: str = "local"
     google_places_api_key: str | None = os.environ.get("GOOGLE_PLACES_API_KEY")
+    # Sprint 4 Lot C — LLM narrative generation (optionnel, fallback template si absent)
+    gemini_api_key: str | None = os.environ.get("GEMINI_API_KEY")
     stella_storage_dir: str | None = os.environ.get("STELLA_STORAGE_DIR")
     # Front -> Backend : Bearer token verifie sur POST /generate-study
     webhook_secret: str | None = os.environ.get("WEBHOOK_SECRET")

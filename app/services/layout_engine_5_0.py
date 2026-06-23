@@ -113,6 +113,8 @@ def _layout_hero_split_6040(slide_data: Dict[str, Any], background: str) -> List
                 {"role": "zone_name", "text": slide_data.get("zone_name") or "Donnée non disponible (TBD)", "style": {"font_size": 64, "font_weight": 800, "color": "var(--primary-color)"}},
                 {"role": "verdict", "text": slide_data.get("verdict_label") or "Donnée non disponible (TBD)", "style": {"font_size": 28, "font_weight": 600, "color": "var(--secondary-color)"}},
                 {"role": "score", "text": slide_data.get("score_label") or "Donnée non disponible (TBD)", "style": {"font_size": 18, "font_weight": 500, "color": "var(--text-muted)"}},
+                *([{"role": "narrative", "text": slide_data["narrative_text"], "style": {"font_size": 16, "font_weight": 400, "color": "var(--text-muted)", "margin_top": 32}}]
+                  if slide_data.get("narrative_text") else []),
             ],
         }
     )
@@ -188,6 +190,26 @@ def _layout_sidebar_analysis_7030(slide_data: Dict[str, Any]) -> List[Dict[str, 
             )
         )
         cursor_top += card_height + MIN_VERTICAL_GAP
+
+    # Narrative text (exec_summary, competitive_insight, etc.) — entre les KPI cards et la source
+    narrative_text = slide_data.get("narrative_text") or ""
+    if narrative_text and cursor_top < CANVAS_HEIGHT - SAFE_MARGIN - 80:
+        narrative_height = min(180, CANVAS_HEIGHT - SAFE_MARGIN - 60 - cursor_top - MIN_VERTICAL_GAP)
+        if narrative_height > 40:
+            objects.append(
+                {
+                    "id": "narrative-text",
+                    "data_object": True,
+                    "data_object_type": "textbox",
+                    "left": right_left,
+                    "top": cursor_top + MIN_VERTICAL_GAP,
+                    "width": right_width,
+                    "height": narrative_height,
+                    "text": narrative_text,
+                    "style": {"font_size": 13, "font_weight": 400, "color": "var(--text-muted)", "line_height": 1.5},
+                }
+            )
+            cursor_top += narrative_height + MIN_VERTICAL_GAP
 
     sources_top = max(cursor_top, CANVAS_HEIGHT - SAFE_MARGIN - 60)
     objects.append(
