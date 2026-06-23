@@ -125,15 +125,13 @@ def _apply_run_style(run: Any, style: dict, is_dark_bg: bool) -> None:
 
 def _add_shape(slide: Any, obj: dict, css_vars: dict, is_dark_bg: bool) -> None:
     """
-    Ajoute un rectangle coloré (shape background) + rend les children comme text boxes.
+    Ajoute un rectangle coloré (shape background) + rend les children dans le text frame
+    intégré du shape (approche native PPTX, plus robuste que des text boxes séparées).
 
     Les shapes Stella (KPI cards, hero-identity, timeline steps) contiennent des children
-    (label / value / trend / zone_name / verdict / narrative…) qui sont emboîtés dans le shape.
-    En PPTX, on les rend comme text boxes positionnés à l'intérieur du shape.
+    (label / value / trend / zone_name / verdict / narrative…) empilés verticalement.
+    Chaque child = un paragraphe dans le text frame du shape, avec sa propre taille de police.
     """
-    from pptx.util import Emu as _E
-    from pptx.enum.shapes import MSO_SHAPE_TYPE  # noqa: F401
-
     left_px: int = obj.get("left") or 0
     top_px: int = obj.get("top") or 0
     width_px: int = obj.get("width") or 100
@@ -150,7 +148,7 @@ def _add_shape(slide: Any, obj: dict, css_vars: dict, is_dark_bg: bool) -> None:
     # Résolution des CSS vars (ex: "var(--stella-primary)")
     if bg_color_raw and str(bg_color_raw).startswith("var("):
         var_name = str(bg_color_raw)[4:-1]  # strip "var(" and ")"
-        bg_color_raw = css_vars.get(var_name, "#1A5BA0")
+        bg_color_raw = css_vars.get(var_name, "#334155")
 
     rgb = _hex_to_rgb(str(bg_color_raw)) if bg_color_raw else None
 
@@ -158,52 +156,62 @@ def _add_shape(slide: Any, obj: dict, css_vars: dict, is_dark_bg: bool) -> None:
         1,  # MSO_SHAPE_TYPE.RECTANGLE
         left, top, width, height,
     )
-    shape.line.fill.background()  # pas de bordure
 
+    # Supprimer la bordure
+    try:
+        shape.line.fill.background()
+    except Exception:
+        try:
+            shape.line.width = Pt(0)
+        except Exception:
+            pass
+
+    # Couleur de fond
     if rgb:
         shape.fill.solid()
         shape.fill.fore_color.rgb = rgb
     else:
-        shape.fill.background()
+        try:
+            shape.fill.background()
+        except Exception:
+            pass
 
-    # --- Rendu des children (label / value / trend / zone_name / verdict / narrative…) ---
-    # Les children sont empilés verticalement dans les limites du shape.
-    # Chaque child produit une text box positionnée absolument dans le shape.
+    # --- Rendu des children dans le text frame natif du shape ---
+    # Approche native PPTX : chaque child = un paragraphe dans le text frame du shape.
+    # Plus robuste que des text boxes séparées (pas de problème de coordonnées).
     children = obj.get("children") or []
     if children:
-        _INNER_PAD_PX = 16   # padding interne horizontal
-        _CHILD_GAP_PX = 6    # espacement vertical entre children
+        tf = shape.text_frame
+        tf.word_wrap = True
+        # Marges internes
+        tf.margin_left = _px(16)
+        tf.margin_top = _px(12)
+        tf.margin_right = _px(16)
+        tf.margin_bottom = _px(12)
 
-        # Estimation de hauteur par child selon font_size
-        def _child_h(child_style: dict) -> int:
-            fs = child_style.get("font_size") or child_style.get("fontSize") or 18
-            try:
-                fs = int(float(str(fs).replace("px", "").strip()))
-            except (ValueError, TypeError):
-                fs = 18
-            return max(24, int(fs * 1.6))
-
-        # Répartition verticale : on empile les children en commençant en haut du shape
-        cursor_top_px = top_px + _INNER_PAD_PX
+        first_para = True
         for child in children:
             child_text = child.get("text") or ""
             if not child_text:
                 continue
             child_style = child.get("style") or {}
-            margin_top = child_style.get("margin_top") or 0
-            child_height_px = _child_h(child_style)
-            cursor_top_px += margin_top
 
-            child_obj = {
-                "left": left_px + _INNER_PAD_PX,
-                "top": cursor_top_px,
-                "width": width_px - 2 * _INNER_PAD_PX,
-                "height": child_height_px,
-                "text": child_text,
-                "style": child_style,
-            }
-            _add_text_box(slide, child_obj, is_dark_bg)
-            cursor_top_px += child_height_px + _CHILD_GAP_PX
+            # Paragraphe (réutiliser le premier, créer les suivants)
+            if first_para:
+                p = tf.paragraphs[0]
+                first_para = False
+            else:
+                p = tf.add_paragraph()
+
+            run = p.add_run()
+            run.text = child_text
+            _apply_run_style(run, child_style, is_dark_bg)
+
+            # Espacement après chaque paragraphe
+            try:
+                p.space_after = Pt(4)
+            except Exception:
+                pass
 
 
 def _apply_slide_background(prs_slide: Any, background: str, css_vars: dict) -> None:
@@ -271,4 +279,3 @@ def build_pptx_for_study(study: Study) -> bytes:
 
     buf = io.BytesIO()
     prs.save(buf)
-    return buf.getvalue()
