@@ -50,7 +50,7 @@ def _header_objects(eyebrow: str, title: str) -> List[Dict[str, Any]]:
     ]
 
 
-def _kpi_card(idx: int, left: int, top: int, width: int, height: int, label: str, value: str, trend: str | None) -> Dict[str, Any]:
+def _kpi_card(idx: int, left: int, top: int, width: int, height: int, label: str, value: str, trend: str | None, fallback_used: bool = False) -> Dict[str, Any]:
     children = [
         {
             "role": "label",
@@ -69,6 +69,14 @@ def _kpi_card(idx: int, left: int, top: int, width: int, height: int, label: str
                 "role": "trend",
                 "text": trend,
                 "style": {"font_size": 20, "font_weight": 600, "color": "var(--secondary-color)"},
+            }
+        )
+    if fallback_used:
+        children.append(
+            {
+                "role": "badge",
+                "text": "estimation",
+                "style": {"font_size": 11, "font_weight": 600, "color": "var(--text-muted)", "text_transform": "uppercase", "letter_spacing": "0.08em"},
             }
         )
     return {
@@ -142,6 +150,7 @@ def _layout_hero_split_6040(slide_data: Dict[str, Any], background: str) -> List
                 label=metric.get("label") or "Donnée non disponible (TBD)",
                 value=metric.get("value") or "Donnée non disponible (TBD)",
                 trend=metric.get("trend"),
+                fallback_used=metric.get("fallback_used", False),
             )
         )
         cursor_top += card_height + MIN_VERTICAL_GAP
@@ -187,6 +196,7 @@ def _layout_sidebar_analysis_7030(slide_data: Dict[str, Any]) -> List[Dict[str, 
                 label=metric.get("label") or "Donnée non disponible (TBD)",
                 value=metric.get("value") or "Donnée non disponible (TBD)",
                 trend=metric.get("trend"),
+                fallback_used=metric.get("fallback_used", False),
             )
         )
         cursor_top += card_height + MIN_VERTICAL_GAP
@@ -257,6 +267,7 @@ def _layout_grid_asymmetric_3columns(slide_data: Dict[str, Any]) -> List[Dict[st
                 label=column.get("label") or "Donnée non disponible (TBD)",
                 value=column.get("value") or "Donnée non disponible (TBD)",
                 trend=column.get("trend"),
+                fallback_used=column.get("fallback_used", False),
             )
         )
         cursor_left += col_width + MIN_HORIZONTAL_GAP
@@ -292,6 +303,7 @@ def _layout_matrix_4quadrants(slide_data: Dict[str, Any]) -> List[Dict[str, Any]
                 label=quadrant.get("label") or "Donnée non disponible (TBD)",
                 value=quadrant.get("value") or "Donnée non disponible (TBD)",
                 trend=quadrant.get("trend"),
+                fallback_used=quadrant.get("fallback_used", False),
             )
         )
     return objects
@@ -376,26 +388,4 @@ def _compute_occupied_ratio(objects: List[Dict[str, Any]]) -> float:
     surface = sum(
         obj["width"] * obj["height"]
         for obj in objects
-        if obj["id"].startswith("kpi-card") or obj["id"] in CONTENT_IDS
-    )
-    return surface / float(CANVAS_WIDTH * CANVAS_HEIGHT)
-
-
-def build_slide_5_0(section_id: str, slide_data: Dict[str, Any]) -> Dict[str, Any]:
-    layout_name, background = SLIDE_LAYOUT_BY_SECTION.get(section_id, ("Sidebar-Analysis-7030", "light"))
-    builder = LAYOUTS.get(layout_name)
-    if builder is None:
-        builder = LAYOUTS["Sidebar-Analysis-7030"]
-    objects = builder(slide_data, background) if layout_name == "Hero-Split-6040" else builder(slide_data)
-    occupied_ratio = _compute_occupied_ratio(objects)
-    return {
-        "section_id": section_id,
-        "layout": layout_name,
-        "background": background,
-        "canvas": {"width": CANVAS_WIDTH, "height": CANVAS_HEIGHT},
-        "safe_margin": SAFE_MARGIN,
-        "occupied_ratio": occupied_ratio,
-        "whitespace_ratio": max(0.0, 1.0 - occupied_ratio),
-        "whitespace_compliant": occupied_ratio <= WHITESPACE_MAX_OCCUPIED_RATIO,
-        "objects": objects,
-    }
+        if obj["id"].startswith("kpi-card

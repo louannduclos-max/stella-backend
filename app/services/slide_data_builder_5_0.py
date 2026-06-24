@@ -8,14 +8,17 @@ FALLBACK = "Donnée non disponible (TBD)"
 
 def _format_metric(metric: Dict[str, Any] | None) -> Dict[str, Any]:
     if not metric:
-        return {"label": FALLBACK, "value": FALLBACK, "trend": None}
+        return {"label": FALLBACK, "value": FALLBACK, "trend": None, "fallback_used": True, "confidence_grade": None}
     value = metric.get("value")
     unit = metric.get("unit") or ""
     text_value = f"{value}{unit}" if value is not None and value != "" else FALLBACK
+    fallback_used = bool(metric.get("fallback_used", False))
     return {
         "label": metric.get("label") or metric.get("name") or FALLBACK,
         "value": text_value,
-        "trend": metric.get("fallback_note") if metric.get("fallback_used") else None,
+        "trend": metric.get("fallback_note") if fallback_used else None,
+        "fallback_used": fallback_used,
+        "confidence_grade": metric.get("confidence_grade"),
     }
 
 
@@ -116,10 +119,4 @@ def collect_expected_strings(slide_data: Dict[str, Any]) -> List[str]:
     if isinstance(slide_data, dict):
         for key, value in slide_data.items():
             if isinstance(value, str):
-                strings.append(value)
-            elif isinstance(value, list):
-                for item in value:
-                    strings.extend(collect_expected_strings(item))
-            elif isinstance(value, dict):
-                strings.extend(collect_expected_strings(value))
-    return [s for s in strings if s and s != FALLBACK]
+                strings.ap
