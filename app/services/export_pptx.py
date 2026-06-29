@@ -279,3 +279,4 @@ def build_pptx_for_study(study: Study) -> bytes:
 
     buf = io.BytesIO()
     prs.save(buf)
+    return buf.getvalue()
