@@ -1,0 +1,52 @@
+{
+  "template_id": "cover",
+  "description": "Cover : bande gauche identité, zone droite KPIs résumé",
+  "canvas": {"width": 1920, "height": 1080},
+  "safe_margin": 80,
+  "slots": {
+    "brand_name": {
+      "type": "text", "max_chars": 30,
+      "position": {"left": 120, "top": 180, "width": 600, "height": 70},
+      "style": {"font_size": 52, "font_weight": 800, "color": "var(--stella-primary)"}
+    },
+    "study_type": {
+      "type": "text", "max_chars": 50,
+      "position": {"left": 120, "top": 265, "width": 600, "height": 35},
+      "style": {"font_size": 22, "color": "var(--stella-text-muted)"}
+    },
+    "zone_name": {
+      "type": "text", "max_chars": 40,
+      "position": {"left": 120, "top": 320, "width": 600, "height": 40},
+      "style": {"font_size": 28, "font_weight": 600, "color": "var(--stella-text)"}
+    },
+    "verdict_badge": {
+      "type": "verdict_badge", "max_chars": 20,
+      "position": {"left": 120, "top": 420, "width": 350, "height": 80}
+    },
+    "score_global": {
+      "type": "score_badge", "max_chars": 10,
+      "position": {"left": 120, "top": 520, "width": 200, "height": 120}
+    },
+    "date_version": {
+      "type": "text", "max_chars": 30,
+      "position": {"left": 120, "top": 900, "width": 400, "height": 30},
+      "style": {"font_size": 13, "color": "var(--stella-text-muted)"}
+    },
+    "kpi_1": {"type": "kpi_card", "max_chars_label": 25, "max_chars_value": 15,
+               "position": {"left": 800, "top": 180, "width": 480, "height": 160}},
+    "kpi_2": {"type": "kpi_card", "max_chars_label": 25, "max_chars_value": 15,
+               "position": {"left": 1320, "top": 180, "width": 480, "height": 160}},
+    "kpi_3": {"type": "kpi_card", "max_chars_label": 25, "max_chars_value": 15,
+               "position": {"left": 800, "top": 380, "width": 480, "height": 160}},
+    "kpi_4": {"type": "kpi_card", "max_chars_label": 25, "max_chars_value": 15,
+               "position": {"left": 1320, "top": 380, "width": 480, "height": 160}},
+    "kpi_5": {"type": "kpi_card", "max_chars_label": 25, "max_chars_value": 15,
+               "position": {"left": 800, "top": 580, "width": 480, "height": 160}},
+    "kpi_6": {"type": "kpi_card", "max_chars_label": 25, "max_chars_value": 15,
+               "position": {"left": 1320, "top": 580, "width": 480, "height": 160}},
+    "scores_row": {
+      "type": "score_bars",
+      "position": {"left": 800, "top": 780, "width": 1000, "height": 200}
+    }
+  }
+}

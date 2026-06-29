@@ -1,0 +1,61 @@
+{
+  "template_id": "kpi_analysis",
+  "description": "KPIs à gauche (60%), analyse narrative à droite (40%)",
+  "canvas": {"width": 1920, "height": 1080},
+  "safe_margin": 80,
+  "slots": {
+    "eyebrow": {
+      "type": "text", "max_chars": 40,
+      "position": {"left": 80, "top": 60, "width": 1760, "height": 30},
+      "style": {"font_size": 14, "color": "var(--stella-text-muted)",
+                "text_transform": "uppercase"}
+    },
+    "title": {
+      "type": "text", "max_chars": 60,
+      "position": {"left": 80, "top": 100, "width": 1760, "height": 60},
+      "style": {"font_size": 42, "font_weight": 700, "color": "var(--stella-primary)"}
+    },
+    "separator": {
+      "type": "shape",
+      "position": {"left": 80, "top": 175, "width": 1760, "height": 2},
+      "style": {"background": "var(--stella-primary)", "opacity": 0.15}
+    },
+    "kpi_1": {
+      "type": "kpi_card", "max_chars_label": 35, "max_chars_value": 20,
+      "position": {"left": 80, "top": 210, "width": 520, "height": 180}
+    },
+    "kpi_2": {
+      "type": "kpi_card", "max_chars_label": 35, "max_chars_value": 20,
+      "position": {"left": 80, "top": 410, "width": 520, "height": 180}
+    },
+    "kpi_3": {
+      "type": "kpi_card", "max_chars_label": 35, "max_chars_value": 20,
+      "position": {"left": 80, "top": 610, "width": 520, "height": 180}
+    },
+    "kpi_4": {
+      "type": "kpi_card", "max_chars_label": 35, "max_chars_value": 20,
+      "position": {"left": 80, "top": 810, "width": 520, "height": 180}
+    },
+    "score_badge": {
+      "type": "score_badge", "max_chars": 15,
+      "position": {"left": 660, "top": 210, "width": 280, "height": 120},
+      "style": {"font_size": 48, "font_weight": 800, "color": "var(--stella-primary)"}
+    },
+    "narrative": {
+      "type": "text", "max_chars": 600,
+      "position": {"left": 660, "top": 360, "width": 1180, "height": 480},
+      "style": {"font_size": 18, "line_height": 1.6, "color": "var(--stella-text)"}
+    },
+    "insight_box": {
+      "type": "highlight_box", "max_chars": 160,
+      "position": {"left": 660, "top": 860, "width": 1180, "height": 130},
+      "style": {"background": "var(--stella-highlight)", "border_radius": 8,
+                "font_size": 16, "font_weight": 600}
+    },
+    "source": {
+      "type": "text", "max_chars": 80,
+      "position": {"left": 80, "top": 1020, "width": 600, "height": 30},
+      "style": {"font_size": 11, "color": "var(--stella-text-muted)"}
+    }
+  }
+}

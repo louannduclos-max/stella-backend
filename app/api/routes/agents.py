@@ -256,6 +256,41 @@ class VisualQAReport(BaseModel):
     overall_status: str = "pass"   # "pass" | "warn" | "fail"
 
 
+# ---------------------------------------------------------------------------
+# 5. Slide Preview (Slide Builder Agent)
+# ---------------------------------------------------------------------------
+
+@router.post("/slides/preview")
+def preview_slide_agent(
+    payload: dict,
+    x_tenant_id: str = "interdomicilio",
+) -> dict:
+    """
+    Teste l'agent Slide Builder sur une section donnée.
+    Utile pour valider un template sans relancer une étude complète.
+
+    Body attendu :
+    {
+      "section_id": "market_scorecard",
+      "manifest_data": { ... }   // manifest complet ou partiel
+    }
+    """
+    from fastapi import Header as _Header  # noqa — import local pour éviter le conflit global
+
+    from app.agents.slide_builder_agent import slide_builder_agent
+
+    section_id = payload.get("section_id", "market_scorecard")
+    manifest_data = payload.get("manifest_data", {})
+    language = payload.get("language", "fr")
+
+    return slide_builder_agent.build_slide(
+        section_id=section_id,
+        manifest_data=manifest_data,
+        tenant_id=x_tenant_id,
+        language=language,
+    )
+
+
 @router.post("/visual-qa/report", response_model=AgentResponse)
 def submit_visual_qa_report(report: VisualQAReport) -> AgentResponse:
     """

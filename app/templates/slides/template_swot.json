@@ -1,0 +1,39 @@
+{
+  "template_id": "swot",
+  "description": "4 quadrants SWOT avec score et bullets argumentés",
+  "canvas": {"width": 1920, "height": 1080},
+  "safe_margin": 80,
+  "slots": {
+    "eyebrow": {
+      "type": "text", "max_chars": 40,
+      "position": {"left": 80, "top": 60, "width": 1760, "height": 30},
+      "style": {"font_size": 14, "text_transform": "uppercase",
+                "color": "var(--stella-text-muted)"}
+    },
+    "title": {
+      "type": "text", "max_chars": 50,
+      "position": {"left": 80, "top": 100, "width": 1760, "height": 55},
+      "style": {"font_size": 38, "font_weight": 700, "color": "var(--stella-primary)"}
+    },
+    "q1_forces": {
+      "type": "swot_quadrant",
+      "label": "Forces", "max_chars_bullets": 400,
+      "position": {"left": 80, "top": 180, "width": 860, "height": 400}
+    },
+    "q2_opportunites": {
+      "type": "swot_quadrant",
+      "label": "Opportunités", "max_chars_bullets": 400,
+      "position": {"left": 980, "top": 180, "width": 860, "height": 400}
+    },
+    "q3_faiblesses": {
+      "type": "swot_quadrant",
+      "label": "Faiblesses", "max_chars_bullets": 400,
+      "position": {"left": 80, "top": 620, "width": 860, "height": 400}
+    },
+    "q4_menaces": {
+      "type": "swot_quadrant",
+      "label": "Menaces", "max_chars_bullets": 400,
+      "position": {"left": 980, "top": 620, "width": 860, "height": 400}
+    }
+  }
+}

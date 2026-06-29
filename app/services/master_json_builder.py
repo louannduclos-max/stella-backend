@@ -60,7 +60,22 @@ class MasterJsonBuilder:
                 business_model=study.business_context.business_model,
                 study_id=study.study_id,
             ),
+            # Narratifs LLM (Gemini ou template) — utilisés par le Slide Builder Agent
+            "narratives": study.narratives or {},
+            # Score composite pondéré
+            "score_composite": self._compute_composite(study),
         }
+
+
+    def _compute_composite(self, study) -> float | None:
+        """Calcule le score composite pondéré depuis les scores de l'étude."""
+        if not study.scores:
+            return None
+        total_weight = sum(s.weight for s in study.scores)
+        if total_weight == 0:
+            return None
+        weighted = sum(s.value * s.weight for s in study.scores)
+        return round(weighted / total_weight, 1)
 
 
 master_json_builder = MasterJsonBuilder()

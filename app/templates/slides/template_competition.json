@@ -1,0 +1,29 @@
+{
+  "template_id": "competition",
+  "description": "3 colonnes concurrents + bande analyse bas",
+  "canvas": {"width": 1920, "height": 1080},
+  "safe_margin": 80,
+  "slots": {
+    "eyebrow": {"type": "text", "max_chars": 40,
+                 "position": {"left": 80, "top": 60, "width": 1760, "height": 30},
+                 "style": {"font_size": 14, "text_transform": "uppercase",
+                           "color": "var(--stella-text-muted)"}},
+    "title": {"type": "text", "max_chars": 60,
+               "position": {"left": 80, "top": 100, "width": 1760, "height": 55},
+               "style": {"font_size": 38, "font_weight": 700,
+                         "color": "var(--stella-primary)"}},
+    "col_1": {"type": "competitor_card", "max_chars_title": 25,
+               "max_items": 4, "max_chars_per_item": 50,
+               "position": {"left": 80, "top": 180, "width": 530, "height": 600}},
+    "col_2": {"type": "competitor_card", "max_chars_title": 25,
+               "max_items": 4, "max_chars_per_item": 50,
+               "position": {"left": 650, "top": 180, "width": 530, "height": 600}},
+    "col_3": {"type": "competitor_card", "max_chars_title": 25,
+               "max_items": 4, "max_chars_per_item": 50,
+               "position": {"left": 1220, "top": 180, "width": 530, "height": 600}},
+    "analysis_band": {
+      "type": "highlight_box", "max_chars": 300,
+      "position": {"left": 80, "top": 820, "width": 1760, "height": 160}
+    }
+  }
+}

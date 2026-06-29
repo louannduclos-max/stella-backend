@@ -55,30 +55,94 @@ def _columns(study: Study, expected: List[str]) -> List[Dict[str, Any]]:
     return [_format_metric(by_id.get(metric_id)) for metric_id in expected[:3]]
 
 
+def _swot_bullets_from_data(study: Study, quadrant: str) -> List[str]:
+    """
+    Chantier C — Génère des bullets SWOT argumentés depuis les données réelles.
+    Logique déterministe (pas de LLM) — fallback si Slide Builder Agent non disponible.
+    Chaque bullet = 1 fait chiffré + son implication business (max 15 mots).
+    """
+    by_id = {m.metric_id: m for m in study.metrics}
+
+    def val(metric_id: str) -> str | None:
+        m = by_id.get(metric_id)
+        if m is None:
+            return None
+        v = m.value
+        u = m.unit or ""
+        return f"{v}{u}" if v is not None and v != "" else None
+
+    if quadrant == "forces":
+        bullets: List[str] = []
+        if v := val("seniors_60_plus_share"):
+            bullets.append(f"{v} de seniors — marché adressable en expansion structurelle")
+        if v := val("median_income"):
+            bullets.append(f"Revenu médian {v} — capacité de paiement confirmée")
+        if v := val("population_total"):
+            bullets.append(f"{v} habitants dans la zone — densité suffisante")
+        if v := val("taxable_households_share"):
+            bullets.append(f"{v} de foyers imposables — tissu CSP+ présent")
+        return bullets or ["Attractivité démographique favorable"]
+
+    elif quadrant == "opportunites":
+        bullets = []
+        if v := val("competitor_count_15min"):
+            bullets.append(f"Seulement {v} concurrents en 15 min — marché peu saturé")
+        if v := val("real_estate_price_house_m2"):
+            bullets.append(f"Immobilier à {v} — zone accessible aux franchisés")
+        if v := val("population_growth_5y"):
+            bullets.append(f"Croissance population {v} — dynamique démographique positive")
+        bullets.append("Aucune offre premium positionnée sur la zone")
+        return bullets
+
+    elif quadrant == "faiblesses":
+        bullets = []
+        if v := val("unemployment_rate"):
+            bullets.append(f"Taux de chômage {v} — recrutement à anticiper")
+        if v := val("car_dependency_share"):
+            bullets.append(f"Dépendance voiture {v} — politique mobilité RH nécessaire")
+        if v := val("care_worker_pool"):
+            bullets.append(f"Bassin soins {v} pers. — marché du travail tendu sur ce profil")
+        return bullets or ["Bassin d'emploi à consolider"]
+
+    elif quadrant == "menaces":
+        bullets = []
+        if v := val("competitor_count_15min"):
+            bullets.append(f"{v} acteurs existants — veille concurrentielle recommandée")
+        if v := val("franchise_brand_count"):
+            bullets.append(f"{v} franchises nationales présentes — notoriété à construire")
+        bullets.append("Complexité réglementaire SAAD — agrément départemental requis")
+        return bullets or ["Environnement réglementaire à surveiller"]
+
+    return []
+
+
 def _swot_quadrants(study: Study) -> List[Dict[str, Any]]:
     # Fix 1 — mapper sur les vrais score_ids : scr_{name} (ex: scr_market_attractiveness)
     score_by_id = {s.score_id: s for s in study.scores}
 
     mapping = [
-        ("Forces",       ["scr_market_attractiveness", "scr_premium_potential", "scr_recurring_revenue_potential"]),
-        ("Faiblesses",   ["scr_execution_risk", "scr_rh_feasibility"]),
-        ("Opportunités", ["scr_recurring_revenue_potential", "scr_premium_potential"]),
-        ("Menaces",      ["scr_competitive_pressure", "scr_regulatory_complexity"]),
+        ("Forces",       "forces",       ["scr_market_attractiveness", "scr_premium_potential", "scr_recurring_revenue_potential"]),
+        ("Faiblesses",   "faiblesses",   ["scr_execution_risk", "scr_rh_feasibility"]),
+        ("Opportunités", "opportunites", ["scr_recurring_revenue_potential", "scr_premium_potential"]),
+        ("Menaces",      "menaces",      ["scr_competitive_pressure", "scr_regulatory_complexity"]),
     ]
 
     quadrants: List[Dict[str, Any]] = []
-    for quadrant_label, candidates in mapping:
+    for quadrant_label, quadrant_key, candidates in mapping:
         score = None
         for sid in candidates:
             if sid in score_by_id:
                 score = score_by_id[sid]
                 break
+        # Chantier C — bullets déterministes depuis les métriques réelles
+        bullets = _swot_bullets_from_data(study, quadrant_key)
         if score:
             quadrants.append({
                 "label": quadrant_label,
                 "value": f"{round(score.value)}/100",
                 "trend": score.label,        # nom lisible du score (ex : "Attractivité marché")
                 "fallback_used": False,
+                "bullets": bullets,          # nouveauté Sprint 2
             })
         else:
             quadrants.append({
@@ -86,6 +150,7 @@ def _swot_quadrants(study: Study) -> List[Dict[str, Any]]:
                 "value": "Non calculé",
                 "trend": None,
                 "fallback_used": True,
+                "bullets": bullets,
             })
     return quadrants
 

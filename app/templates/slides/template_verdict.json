@@ -1,0 +1,36 @@
+{
+  "template_id": "verdict",
+  "description": "Verdict final : grande zone GO/NO GO + conditions + scores",
+  "canvas": {"width": 1920, "height": 1080},
+  "safe_margin": 80,
+  "slots": {
+    "verdict_label": {
+      "type": "text", "max_chars": 20,
+      "position": {"left": 80, "top": 120, "width": 900, "height": 100},
+      "style": {"font_size": 72, "font_weight": 900, "color": "var(--stella-primary)"}
+    },
+    "score_composite": {
+      "type": "text", "max_chars": 15,
+      "position": {"left": 80, "top": 240, "width": 400, "height": 60},
+      "style": {"font_size": 36, "font_weight": 700}
+    },
+    "narrative": {
+      "type": "text", "max_chars": 800,
+      "position": {"left": 80, "top": 330, "width": 860, "height": 440},
+      "style": {"font_size": 17, "line_height": 1.65}
+    },
+    "conditions_title": {
+      "type": "text", "max_chars": 25,
+      "position": {"left": 80, "top": 790, "width": 860, "height": 35},
+      "style": {"font_size": 18, "font_weight": 700}
+    },
+    "conditions_list": {
+      "type": "bullet_list", "max_items": 5, "max_chars_per_item": 80,
+      "position": {"left": 80, "top": 835, "width": 860, "height": 180}
+    },
+    "scores_panel": {
+      "type": "score_bars_vertical",
+      "position": {"left": 1020, "top": 120, "width": 820, "height": 900}
+    }
+  }
+}
