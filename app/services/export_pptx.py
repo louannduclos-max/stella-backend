@@ -262,6 +262,18 @@ def build_pptx_for_study(study: Study) -> bytes:
                     _add_text_box(prs_slide, obj, is_dark)
                 elif obj_type == "shape":
                     _add_shape(prs_slide, obj, css_vars_dict, is_dark)
+                elif obj_type == "kpi_list":
+                    # Rendre kpi_list comme bloc texte structuré (label: valeur)
+                    items = obj.get("items") or []
+                    lines = [
+                        f"{it.get('label', '')}: {it.get('value', '')}"
+                        for it in items if it.get("label") or it.get("value")
+                    ]
+                    _add_text_box(
+                        prs_slide,
+                        {**obj, "text": "\n".join(lines), "children": []},
+                        is_dark,
+                    )
                 # chart et image → placeholder texte (P1)
                 elif obj_type in ("chart", "image", "icon"):
                     _add_text_box(

@@ -7,15 +7,20 @@ NEARBY_URL = "https://maps.googleapis.com/maps/api/place/nearbysearch/json"
 TEXT_URL = "https://maps.googleapis.com/maps/api/place/textsearch/json"
 
 
+# Fix 5 — keywords enrichis pour meilleure détection SAP (notamment villes moyennes)
 SAP_KEYWORDS_FR = [
     "services à la personne",
     "aide à domicile",
+    "aide aux personnes âgées",
+    "aide aux seniors",
     "ménage à domicile",
     "garde enfants à domicile",
 ]
 SAP_KEYWORDS_ES = [
     "servicios a domicilio",
     "ayuda a domicilio",
+    "ayuda a mayores",
+    "cuidado de personas mayores",
     "limpieza a domicilio",
     "cuidado de mayores",
 ]

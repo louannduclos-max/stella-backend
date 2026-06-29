@@ -168,17 +168,19 @@ def _layout_sidebar_analysis_7030(slide_data: Dict[str, Any]) -> List[Dict[str, 
     right_left = SAFE_MARGIN + left_width + MIN_HORIZONTAL_GAP
     right_width = CANVAS_WIDTH - SAFE_MARGIN - right_left
 
+    # Fix 2 — remplacer [CHART] vide par kpi_list avec toutes les métriques disponibles
+    metrics_all = slide_data.get("metrics_extended") or slide_data.get("metrics") or []
     objects.append(
         {
-            "id": "analysis-chart",
+            "id": "analysis-kpi-list",
             "data_object": True,
-            "data_object_type": "chart",
+            "data_object_type": "kpi_list",
             "left": SAFE_MARGIN,
             "top": content_top,
             "width": left_width,
             "height": CANVAS_HEIGHT - content_top - SAFE_MARGIN,
             "style": {"background": "var(--bg-light)", "border_radius": 8, "padding": 30},
-            "chart_id": slide_data.get("chart_id"),
+            "items": metrics_all,
         }
     )
 
@@ -385,7 +387,7 @@ SLIDE_LAYOUT_BY_SECTION = {
 def _compute_occupied_ratio(objects: List[Dict[str, Any]]) -> float:
     # On ne compte que les blocs de contenu (cards, chart, hero-identity, timeline-axis).
     # On exclut les objets de header (eyebrow, title, separator).
-    CONTENT_IDS = {"hero-identity", "analysis-chart", "timeline-axis"}
+    CONTENT_IDS = {"hero-identity", "analysis-chart", "analysis-kpi-list", "timeline-axis"}
     surface = sum(
         obj["width"] * obj["height"]
         for obj in objects

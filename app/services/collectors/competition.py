@@ -7,8 +7,9 @@ from app.services.external.google_places_api import classify_competitors, google
 from app.services.external.ine_geo import ine_geo
 
 
-RADIUS_15MIN_M = 8000
-RADIUS_30MIN_M = 18000
+# Fix 5 — rayon élargi : 8km était trop court pour les villes moyennes/rurales
+RADIUS_15MIN_M = 15000   # ~15 km / 15 min voiture
+RADIUS_30MIN_M = 30000   # ~30 km / 30 min voiture
 
 
 class CompetitionCollector(BaseCollector):
@@ -66,7 +67,7 @@ class CompetitionCollector(BaseCollector):
             brand_flag = DEFAULT_METRIC_BASELINES["brand_presence_flag"]
             top_density = DEFAULT_METRIC_BASELINES["top_competitor_density"]
             fallback = True
-            note = "Google Places non configuré (GOOGLE_PLACES_API_KEY manquant) - baseline appliquée."
+            note = "Google Places non disponible - estimation nationale appliquée."
             grade = ConfidenceGrade.D
 
         metrics = [
