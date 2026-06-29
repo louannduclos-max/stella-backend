@@ -7,14 +7,19 @@ NEARBY_URL = "https://maps.googleapis.com/maps/api/place/nearbysearch/json"
 TEXT_URL = "https://maps.googleapis.com/maps/api/place/textsearch/json"
 
 
-# Fix 5 — keywords enrichis pour meilleure détection SAP (notamment villes moyennes)
+# Keywords validés par probe Places API (Request_DENIED filtrés)
+# Probe Auray : "aide à domicile" → 20 résultats, "services à domicile" → 20,
+# "aide aux seniors" → 4, "senior" → 20, "O2 Care Services" → 4, "Vitalliance" → 1
 SAP_KEYWORDS_FR = [
-    "services à la personne",
     "aide à domicile",
-    "aide aux personnes âgées",
+    "services à domicile",
     "aide aux seniors",
-    "ménage à domicile",
-    "garde enfants à domicile",
+    "senior service",
+    "maintien à domicile",
+    "Azaé",
+    "Vitalliance",
+    "O2 Care Services",
+    "Petits-fils",
 ]
 SAP_KEYWORDS_ES = [
     "servicios a domicilio",

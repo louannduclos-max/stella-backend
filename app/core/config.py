@@ -32,10 +32,11 @@ class Settings(BaseModel):
         "https://lovable.dev",
         "https://*.lovable.app",
         "https://*.lovableproject.com",
+        "https://stellav1front.pages.dev",
     ]
     cors_allow_origin_regex: str | None = os.environ.get(
         "CORS_ALLOW_ORIGIN_REGEX",
-        r"https://.*\.(lovable\.app|lovableproject\.com)$",
+        r"https://.*\.(lovable\.app|lovableproject\.com|pages\.dev)$",
     )
 
 
