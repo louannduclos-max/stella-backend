@@ -6,8 +6,8 @@ Principe de séparation :
 - layout_engine_5_0 / slide_builder_agent → positions des objets
 - NarrativeAgent → contenu texte des objets qui ont fill_with_narrative=True
 
-Chaque slot de type textbox avec fill_with_narrative=True est soumis au LLM.
-Le LLM ne touche jamais aux coordonnées (left/top/width/height).
+Utilise GEMINI_API_KEY (Google AI Studio, gratuit) — même clé que gemini_analyst.
+Fallback silencieux si la clé est absente ou si l'API échoue.
 """
 import json
 import logging
@@ -17,9 +17,10 @@ import httpx
 
 logger = logging.getLogger(__name__)
 
-VERTEX_REGION = "europe-west1"
-VERTEX_PROJECT = os.environ.get("GCP_PROJECT_ID", "ouicare-stella-prod")
-VERTEX_MODEL = "gemini-2.0-flash"
+_GEMINI_URL = (
+    "https://generativelanguage.googleapis.com/v1beta/models/"
+    "gemini-1.5-flash:generateContent"
+)
 
 NARRATIVE_SYSTEM_PROMPT = """
 Tu es un rédacteur d'études de faisabilité franchise. Tu reçois :
@@ -55,9 +56,14 @@ class NarrativeAgent:
         - data_object_type == "textbox"
         - fill_with_narrative == True
 
-        Si Vertex est indisponible : retourne les objets sans modification
-        (les textes statiques générés par le layout_engine restent inchangés).
+        Si GEMINI_API_KEY est absente ou si l'API échoue : retourne les objets
+        sans modification (les textes statiques du layout_engine restent inchangés).
         """
+        api_key = os.environ.get("GEMINI_API_KEY")
+        if not api_key:
+            logger.debug("[NarrativeAgent] GEMINI_API_KEY absente — fallback template")
+            return slide_objects
+
         # Identifier les slots texte narratifs à remplir
         text_slots = [
             {
@@ -83,43 +89,18 @@ class NarrativeAgent:
         )
 
         try:
-            import google.auth
-            import google.auth.transport.requests
-
-            # Support credentials JSON inline (Option A Render)
-            creds_json = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS_JSON")
-            if creds_json and not os.environ.get("GOOGLE_APPLICATION_CREDENTIALS"):
-                import tempfile
-                tmp = tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False)
-                tmp.write(creds_json)
-                tmp.close()
-                os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = tmp.name
-                logger.debug("[NarrativeAgent] Credentials écrits depuis GOOGLE_APPLICATION_CREDENTIALS_JSON")
-
-            creds, _ = google.auth.default(
-                scopes=["https://www.googleapis.com/auth/cloud-platform"]
-            )
-            creds.refresh(google.auth.transport.requests.Request())
-
-            endpoint = (
-                f"https://{VERTEX_REGION}-aiplatform.googleapis.com/v1/"
-                f"projects/{VERTEX_PROJECT}/locations/{VERTEX_REGION}/"
-                f"publishers/google/models/{VERTEX_MODEL}:generateContent"
-            )
-
             r = httpx.post(
-                endpoint,
+                f"{_GEMINI_URL}?key={api_key}",
                 json={
-                    "contents": [{"role": "user", "parts": [{"text": user_prompt}]}],
-                    "systemInstruction": {
+                    "system_instruction": {
                         "parts": [{"text": NARRATIVE_SYSTEM_PROMPT}]
                     },
+                    "contents": [{"parts": [{"text": user_prompt}]}],
                     "generationConfig": {
                         "temperature": 0.1,
                         "maxOutputTokens": 2000,
                     },
                 },
-                headers={"Authorization": f"Bearer {creds.token}"},
                 timeout=30,
             )
             r.raise_for_status()
