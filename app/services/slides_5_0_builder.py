@@ -1,7 +1,12 @@
 import logging
+import os
 from typing import Any, Dict, List
 
 from app.api.schemas.common import Study
+
+# Option B — désactiver l'agent Vertex si GCP non configuré.
+# Mettre SLIDE_BUILDER_USE_AGENT=false sur Render pour rester sur le fallback déterministe.
+_USE_AGENT = os.environ.get("SLIDE_BUILDER_USE_AGENT", "true").lower() == "true"
 from app.services.css_vars_builder import build_css_vars_for_study
 from app.services.layout_engine_5_0 import build_slide_5_0
 from app.services.master_json_builder import master_json_builder
@@ -88,13 +93,25 @@ def build_slides_5_0_for_study(study: Study) -> Dict[str, Any]:
     # Construire le manifest une seule fois (source de vérité pour l'agent)
     manifest = master_json_builder.build(study)
 
-    # Tentative d'import de l'agent (silencieux si non disponible)
+    # NarrativeAgent — enrichit les slots texte après layout (silencieux si Vertex indispo)
+    _narrative_agent = None
+    if _USE_AGENT:
+        try:
+            from app.agents.narrative_agent import narrative_agent as _na
+            _narrative_agent = _na
+        except Exception as _e:
+            logger.debug("[slides_builder] NarrativeAgent non disponible : %s", _e)
+
+    # Tentative d'import de l'agent (silencieux si non disponible ou désactivé)
     _agent = None
-    try:
-        from app.agents.slide_builder_agent import slide_builder_agent
-        _agent = slide_builder_agent
-    except Exception as _e:
-        logger.debug("[slides_builder] Slide Builder Agent non disponible : %s", _e)
+    if _USE_AGENT:
+        try:
+            from app.agents.slide_builder_agent import slide_builder_agent
+            _agent = slide_builder_agent
+        except Exception as _e:
+            logger.debug("[slides_builder] Slide Builder Agent non disponible : %s", _e)
+    else:
+        logger.info("[slides_builder] Agent désactivé (SLIDE_BUILDER_USE_AGENT=false) → fallback déterministe")
 
     for idx, section in enumerate(SECTION_REGISTRY, start=1):
         section_id = section["section_id"]
@@ -112,6 +129,11 @@ def build_slides_5_0_for_study(study: Study) -> Dict[str, Any]:
                 skipped.append(section_id)
                 continue
             layout_fb = build_slide_5_0(section_id, slide_data_check)
+            objects_fb = layout_fb["objects"]
+            if _narrative_agent:
+                objects_fb = _narrative_agent.fill_text_slots(
+                    objects_fb, manifest, language=study.language or "fr"
+                )
             slides.append({
                 "slide_index": idx,
                 "slide_id": f"slide_{idx:02d}_{section_id}",
@@ -121,7 +143,7 @@ def build_slides_5_0_for_study(study: Study) -> Dict[str, Any]:
                 "background": layout_fb["background"],
                 "canvas": layout_fb["canvas"],
                 "safe_margin": layout_fb["safe_margin"],
-                "objects": layout_fb["objects"],
+                "objects": objects_fb,
                 "agent_generated": False,
                 "expected_kpis": section.get("expected_kpis", []),
             })
@@ -158,6 +180,11 @@ def build_slides_5_0_for_study(study: Study) -> Dict[str, Any]:
                 skipped.append(section_id)
                 continue
             layout = build_slide_5_0(section_id, slide_data)
+            objects_exc = layout["objects"]
+            if _narrative_agent:
+                objects_exc = _narrative_agent.fill_text_slots(
+                    objects_exc, manifest, language=study.language or "fr"
+                )
             slides.append({
                 "slide_index": idx,
                 "slide_id": f"slide_{idx:02d}_{section_id}",
@@ -167,7 +194,7 @@ def build_slides_5_0_for_study(study: Study) -> Dict[str, Any]:
                 "background": layout["background"],
                 "canvas": layout["canvas"],
                 "safe_margin": layout["safe_margin"],
-                "objects": layout["objects"],
+                "objects": objects_exc,
                 "agent_generated": False,
                 "fallback_reason": str(exc),
                 "expected_kpis": section.get("expected_kpis", []),

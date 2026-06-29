@@ -104,6 +104,21 @@ class SlideBuilderAgent:
         try:
             import google.auth
             import google.auth.transport.requests
+
+            # Option A — credentials JSON inline via variable d'env Render
+            # Permet d'éviter de monter un fichier de clé sur le filesystem.
+            creds_json = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS_JSON")
+            if creds_json and not os.environ.get("GOOGLE_APPLICATION_CREDENTIALS"):
+                import json as _json
+                import tempfile
+                tmp = tempfile.NamedTemporaryFile(
+                    mode="w", suffix=".json", delete=False
+                )
+                tmp.write(creds_json)
+                tmp.close()
+                os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = tmp.name
+                logger.debug("[SlideBuilderAgent] Credentials écrits depuis GOOGLE_APPLICATION_CREDENTIALS_JSON")
+
             creds, _ = google.auth.default(
                 scopes=["https://www.googleapis.com/auth/cloud-platform"]
             )

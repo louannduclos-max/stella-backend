@@ -291,6 +291,78 @@ def preview_slide_agent(
     )
 
 
+# ---------------------------------------------------------------------------
+# 6. Debug — Google Places Probe
+# ---------------------------------------------------------------------------
+
+@router.get("/debug/places-probe")
+def debug_places_probe(
+    city: str = "Auray",
+    lat: float = 47.6667,
+    lng: float = -2.9833,
+    radius: int = 15000,
+) -> dict:
+    """
+    Endpoint de diagnostic temporaire — teste Google Places Nearby Search directement.
+    Appeler : GET /agents/debug/places-probe?city=Auray
+    Interpréter le statut :
+    - REQUEST_DENIED → clé non autorisée sur Places API
+    - OK count=0     → radius trop petit ou mots-clés inadaptés
+    - OK count=N     → bug dans le collector, pas dans l'API
+    """
+    import os
+    import httpx
+
+    key = os.environ.get("GOOGLE_PLACES_API_KEY", "")
+    if not key:
+        return {"error": "GOOGLE_PLACES_API_KEY absent de l'env Render"}
+
+    keywords = [
+        "aide à domicile",
+        "aide aux personnes âgées",
+        "aide aux seniors",
+        "services à domicile",
+        "Interdomicilio",
+        "Azaé",
+        "O2 Care Services",
+        "Vitalliance",
+        "senior",
+    ]
+    results = {}
+    for kw in keywords:
+        try:
+            r = httpx.get(
+                "https://maps.googleapis.com/maps/api/place/nearbysearch/json",
+                params={
+                    "location": f"{lat},{lng}",
+                    "radius": radius,
+                    "keyword": kw,
+                    "key": key,
+                },
+                timeout=10,
+            )
+            data = r.json()
+            results[kw] = {
+                "status": data.get("status"),
+                "count": len(data.get("results", [])),
+                "error_message": data.get("error_message"),
+                "names": [p["name"] for p in data.get("results", [])[:3]],
+            }
+        except Exception as e:
+            results[kw] = {"status": "EXCEPTION", "error": str(e)}
+
+    total = sum(r.get("count", 0) for r in results.values() if isinstance(r.get("count"), int))
+    return {
+        "city": city,
+        "coords": {"lat": lat, "lng": lng},
+        "radius_m": radius,
+        "key_present": bool(key),
+        "key_prefix": key[:8] + "..." if key else "",
+        "total_results": total,
+        "by_keyword": results,
+    }
+
+
 @router.post("/visual-qa/report", response_model=AgentResponse)
 def submit_visual_qa_report(report: VisualQAReport) -> AgentResponse:
     """
