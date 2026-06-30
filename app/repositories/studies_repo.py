@@ -9,6 +9,10 @@ _SUPABASE_URL: str = os.environ["SUPABASE_URL"]
 _SUPABASE_KEY: str = os.environ["SUPABASE_SERVICE_ROLE_KEY"]
 _TABLE = "study_generated_data"
 
+# Log diagnostique au démarrage (URL seulement, pas la clé)
+_project_id = _SUPABASE_URL.replace("https://", "").split(".")[0]
+logger.info("[studies_repo] Supabase project_id=%s", _project_id)
+
 class StudiesRepository:
     def __init__(self) -> None:
         self._client: Client = create_client(_SUPABASE_URL, _SUPABASE_KEY)
