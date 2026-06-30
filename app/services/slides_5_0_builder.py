@@ -1,12 +1,21 @@
+"""
+Slides 5.0 builder — chemin unique et propre.
+
+Architecture Sprint 5 :
+  layout_engine_5_0 (déterministe, source de vérité positions)
+    → validate_slide_objects (schéma unique, rejette les malformés)
+    → [optionnel] NarrativeAgent.fill_text_slots (enrichit les slots texte)
+    → [optionnel] QAAgent.validate_and_merge (revert slot par slot si échec)
+
+slide_builder_agent (Vertex AI / Sprint 2) n'est PLUS dans le chemin actif.
+Le fichier est conservé dans le repo mais ne doit pas être appelé ici.
+"""
 import logging
 import os
 from typing import Any, Dict, List
 
 from app.api.schemas.common import Study
-
-# Option B — désactiver l'agent Vertex si GCP non configuré.
-# Mettre SLIDE_BUILDER_USE_AGENT=false sur Render pour rester sur le fallback déterministe.
-_USE_AGENT = os.environ.get("SLIDE_BUILDER_USE_AGENT", "true").lower() == "true"
+from app.schemas.slide_objects import validate_slide_objects
 from app.services.css_vars_builder import build_css_vars_for_study
 from app.services.layout_engine_5_0 import build_slide_5_0
 from app.services.master_json_builder import master_json_builder
@@ -14,6 +23,8 @@ from app.services.section_registry import SECTION_REGISTRY
 from app.services.slide_data_builder_5_0 import build_slide_data_5_0, collect_expected_strings
 
 logger = logging.getLogger(__name__)
+
+USE_NARRATIVE_AGENT = os.environ.get("SLIDE_BUILDER_USE_AGENT", "false").lower() == "true"
 
 FALLBACK = "Donnée non disponible (TBD)"
 
@@ -24,11 +35,9 @@ _ALWAYS_INCLUDE = {"cover", "executive_summary", "swot", "verdict"}
 def _is_slide_data_empty(slide_data: Dict[str, Any]) -> bool:
     """
     Retourne True si TOUS les slots de données primaires d'un slide
-    sont à la valeur FALLBACK (les champs statiques comme title/eyebrow
-    ne sont pas comptés).
-    Utilisé pour filtrer les slides sans contenu réel.
+    sont à la valeur FALLBACK. Les champs statiques (title/eyebrow)
+    ne sont pas comptés.
     """
-    # Slots spécifiques selon le type de layout
     for key in ("metrics", "columns", "steps", "hero_kpis", "quadrants"):
         items = slide_data.get(key)
         if items is not None and isinstance(items, list) and len(items) > 0:
@@ -36,12 +45,9 @@ def _is_slide_data_empty(slide_data: Dict[str, Any]) -> bool:
                 item for item in items
                 if isinstance(item, dict) and item.get("value") not in (None, FALLBACK, "")
             ]
-            # Si au moins un slot a une vraie valeur -> slide non vide
             if non_fallback:
                 return False
-            # Tous les slots sont FALLBACK -> slide vide
             return True
-    # Pas de liste de data trouvée -> considéré non vide (slide structurel)
     return False
 
 
@@ -52,153 +58,98 @@ def _resolve_brand_slug(study: Study) -> str | None:
     """
     from app.core.brand_profiles import get_brand_profile
 
-    # 1. Essayer le premier mot du brand_name (ex: "O2 Grenoble" -> "o2")
     brand_words = (study.business_context.brand_name or "").strip().lower().split()
     if brand_words and get_brand_profile(brand_words[0]):
         return brand_words[0]
 
-    # 2. Essayer tenant_id
     if study.tenant_id and get_brand_profile(study.tenant_id):
         return study.tenant_id
 
-    # 3. Fallback : tenant_id même sans profil enregistré (permet CSS vars par défaut)
     return study.tenant_id or None
-
-
-def _build_slide_fallback(
-    study: Study,
-    section: Dict[str, Any],
-) -> Dict[str, Any]:
-    """Fallback : utilise layout_engine_5_0 existant si l'agent échoue."""
-    section_id = section["section_id"]
-    expected_kpis = section.get("expected_kpis") or []
-    display_name = section.get("display_name")
-    slide_data = build_slide_data_5_0(study, section_id, expected_kpis, display_name=display_name)
-    layout = build_slide_5_0(section_id, slide_data)
-    return {
-        "title": slide_data["title"],
-        "layout": layout["layout"],
-        "background": layout["background"],
-        "canvas": layout["canvas"],
-        "safe_margin": layout["safe_margin"],
-        "objects": layout["objects"],
-        "fallback_used": False,
-    }
 
 
 def build_slides_5_0_for_study(study: Study) -> Dict[str, Any]:
     slides: List[Dict[str, Any]] = []
     skipped: List[str] = []
 
-    # Construire le manifest une seule fois (source de vérité pour l'agent)
+    # Manifest — source de vérité pour l'agent et le QA
     manifest = master_json_builder.build(study)
 
-    # NarrativeAgent — enrichit les slots texte après layout (silencieux si Vertex indispo)
+    # Import optionnel de NarrativeAgent (silencieux si indispo)
     _narrative_agent = None
-    if _USE_AGENT:
+    if USE_NARRATIVE_AGENT:
         try:
             from app.agents.narrative_agent import narrative_agent as _na
             _narrative_agent = _na
+            logger.info("[slides_builder] NarrativeAgent actif")
         except Exception as _e:
-            logger.debug("[slides_builder] NarrativeAgent non disponible : %s", _e)
+            logger.warning("[slides_builder] NarrativeAgent non disponible : %s", _e)
 
-    # Tentative d'import de l'agent (silencieux si non disponible ou désactivé)
-    _agent = None
-    if _USE_AGENT:
+    # Import optionnel de QAAgent (toujours dispo car déterministe, mais gardons la défense)
+    _qa_agent = None
+    if USE_NARRATIVE_AGENT:
         try:
-            from app.agents.slide_builder_agent import slide_builder_agent
-            _agent = slide_builder_agent
+            from app.agents.qa_agent import qa_agent as _qa
+            _qa_agent = _qa
         except Exception as _e:
-            logger.debug("[slides_builder] Slide Builder Agent non disponible : %s", _e)
-    else:
-        logger.info("[slides_builder] Agent désactivé (SLIDE_BUILDER_USE_AGENT=false) → fallback déterministe")
+            logger.warning("[slides_builder] QAAgent non disponible : %s", _e)
+
+    if not USE_NARRATIVE_AGENT:
+        logger.info("[slides_builder] Mode déterministe pur (SLIDE_BUILDER_USE_AGENT=false)")
 
     for idx, section in enumerate(SECTION_REGISTRY, start=1):
         section_id = section["section_id"]
         display_name = section.get("display_name", section_id)
+        expected_kpis = section.get("expected_kpis") or []
 
-        # ── Fallback pré-check : si agent non dispo, utiliser le layout engine ──
-        if _agent is None:
-            slide_data_check = build_slide_data_5_0(
-                study,
-                section_id,
-                section.get("expected_kpis") or [],
-                display_name=display_name,
-            )
-            if section_id not in _ALWAYS_INCLUDE and _is_slide_data_empty(slide_data_check):
-                skipped.append(section_id)
-                continue
-            layout_fb = build_slide_5_0(section_id, slide_data_check)
-            objects_fb = layout_fb["objects"]
-            if _narrative_agent:
-                objects_fb = _narrative_agent.fill_text_slots(
-                    objects_fb, manifest, language=study.language or "fr"
-                )
-            slides.append({
-                "slide_index": idx,
-                "slide_id": f"slide_{idx:02d}_{section_id}",
-                "section_id": section_id,
-                "title": slide_data_check["title"],
-                "layout": layout_fb["layout"],
-                "background": layout_fb["background"],
-                "canvas": layout_fb["canvas"],
-                "safe_margin": layout_fb["safe_margin"],
-                "objects": objects_fb,
-                "agent_generated": False,
-                "expected_kpis": section.get("expected_kpis", []),
-            })
+        # 1. Build données + layout déterministe — TOUJOURS, jamais bypass
+        slide_data = build_slide_data_5_0(study, section_id, expected_kpis, display_name=display_name)
+
+        # Filtrage des slides sans données (sauf sections structurelles)
+        if section_id not in _ALWAYS_INCLUDE and _is_slide_data_empty(slide_data):
+            skipped.append(section_id)
             continue
 
-        # ── Tentative avec le Slide Builder Agent ──
-        try:
-            agent_layout = _agent.build_slide(
-                section_id=section_id,
-                manifest_data=manifest,
-                tenant_id=study.tenant_id or "interdomicilio",
-                language=study.language or "fr",
-            )
-            slides.append({
-                "slide_index": idx,
-                "slide_id": f"slide_{idx:02d}_{section_id}",
-                "section_id": section_id,
-                "title": display_name,
-                **agent_layout,
-                "expected_kpis": section.get("expected_kpis", []),
-            })
-        except Exception as exc:
-            # ── Fallback silencieux sur layout_engine_5_0 ──
-            logger.warning(
-                "[slides_builder] Agent KO pour '%s' → fallback layout_engine. Raison : %s",
-                section_id,
-                exc,
-            )
-            expected_kpis = section.get("expected_kpis") or []
-            slide_data = build_slide_data_5_0(
-                study, section_id, expected_kpis, display_name=display_name
-            )
-            if section_id not in _ALWAYS_INCLUDE and _is_slide_data_empty(slide_data):
-                skipped.append(section_id)
-                continue
-            layout = build_slide_5_0(section_id, slide_data)
-            objects_exc = layout["objects"]
-            if _narrative_agent:
-                objects_exc = _narrative_agent.fill_text_slots(
-                    objects_exc, manifest, language=study.language or "fr"
+        layout = build_slide_5_0(section_id, slide_data)
+
+        # 2. Validation schéma unique — rejette les objets malformés ou hors canvas
+        objects = validate_slide_objects(layout["objects"])
+
+        # 3. Enrichissement narratif optionnel + QA slot par slot
+        if _narrative_agent:
+            try:
+                enriched = _narrative_agent.fill_text_slots(
+                    objects, manifest, language=study.language or "fr"
                 )
-            slides.append({
-                "slide_index": idx,
-                "slide_id": f"slide_{idx:02d}_{section_id}",
-                "section_id": section_id,
-                "title": slide_data["title"],
-                "layout": layout["layout"],
-                "background": layout["background"],
-                "canvas": layout["canvas"],
-                "safe_margin": layout["safe_margin"],
-                "objects": objects_exc,
-                "agent_generated": False,
-                "fallback_reason": str(exc),
-                "expected_kpis": section.get("expected_kpis", []),
-            })
+                if _qa_agent:
+                    objects = _qa_agent.validate_and_merge(
+                        agent_objects=enriched,
+                        deterministic_objects=objects,
+                        manifest=manifest,
+                    )
+                else:
+                    objects = enriched
+            except Exception as e:
+                logger.warning("[slides_builder] NarrativeAgent KO sur '%s' → fallback déterministe : %s", section_id, e)
+                # objects reste la version déterministe validée — jamais d'échec visible
+
+        slides.append({
+            "slide_index": idx,
+            "slide_id": f"slide_{idx:02d}_{section_id}",
+            "section_id": section_id,
+            "title": slide_data["title"],
+            "layout": layout["layout"],
+            "background": layout["background"],
+            "canvas": layout["canvas"],
+            "safe_margin": layout["safe_margin"],
+            "whitespace_ratio": layout.get("whitespace_ratio", 0.0),
+            "whitespace_compliant": layout.get("whitespace_compliant", True),
+            "expected_kpis": expected_kpis,
+            "slide_data": slide_data,
+            "objects": objects,
+            "expected_strings": collect_expected_strings(slide_data),
+            "agent_generated": _narrative_agent is not None,
+        })
 
     brand_slug = _resolve_brand_slug(study)
     css_vars = build_css_vars_for_study(brand_slug, study.brand_profile_override)

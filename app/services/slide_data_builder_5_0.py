@@ -3,10 +3,10 @@ from typing import Any, Dict, List
 from app.api.schemas.common import Study
 
 
-FALLBACK = "Donnée non disponible (TBD)"
+FALLBACK = "Donnee non disponible (TBD)"
 
 
-def _format_metric(metric: Dict[str, Any] | None) -> Dict[str, Any]:
+def _format_metric(metric):
     if not metric:
         return {"label": FALLBACK, "value": FALLBACK, "trend": None, "fallback_used": True, "confidence_grade": "E"}
     value = metric.get("value")
@@ -16,7 +16,6 @@ def _format_metric(metric: Dict[str, Any] | None) -> Dict[str, Any]:
     return {
         "label": metric.get("label") or metric.get("name") or FALLBACK,
         "value": text_value,
-        # Fix 4 — masquer les messages d'erreur techniques ; badge "estimation" suffit côté UI
         "trend": "Source : estimation nationale" if fallback_used else None,
         "fallback_used": fallback_used,
         "confidence_grade": metric.get("confidence_grade", "C"),
@@ -24,12 +23,10 @@ def _format_metric(metric: Dict[str, Any] | None) -> Dict[str, Any]:
 
 
 def _format_verdict(verdict) -> str:
-    """Fix 3 — normalise VerdictEnum → label lisible ('NO GO', 'GO', 'GO CONDITIONAL')."""
     if verdict is None:
-        return "Non déterminé"
-    # VerdictEnum(str, Enum) : .value = "GO" | "GO_CONDITIONAL" | "NO_GO"
+        return "Non determine"
     val = verdict.value if hasattr(verdict, "value") else str(verdict)
-    val = val.split(".")[-1]   # strip éventuel préfixe "VerdictEnum."
+    val = val.split(".")[-1]
     return val.replace("_", " ")
 
 
@@ -56,14 +53,9 @@ def _columns(study: Study, expected: List[str]) -> List[Dict[str, Any]]:
 
 
 def _swot_bullets_from_data(study: Study, quadrant: str) -> List[str]:
-    """
-    Chantier C — Génère des bullets SWOT argumentés depuis les données réelles.
-    Logique déterministe (pas de LLM) — fallback si Slide Builder Agent non disponible.
-    Chaque bullet = 1 fait chiffré + son implication business (max 15 mots).
-    """
     by_id = {m.metric_id: m for m in study.metrics}
 
-    def val(metric_id: str) -> str | None:
+    def val(metric_id: str):
         m = by_id.get(metric_id)
         if m is None:
             return None
@@ -74,59 +66,56 @@ def _swot_bullets_from_data(study: Study, quadrant: str) -> List[str]:
     if quadrant == "forces":
         bullets: List[str] = []
         if v := val("seniors_60_plus_share"):
-            bullets.append(f"{v} de seniors — marché adressable en expansion structurelle")
+            bullets.append(f"{v} de seniors -- marche adressable en expansion structurelle")
         if v := val("median_income"):
-            bullets.append(f"Revenu médian {v} — capacité de paiement confirmée")
+            bullets.append(f"Revenu median {v} -- capacite de paiement confirmee")
         if v := val("population_total"):
-            bullets.append(f"{v} habitants dans la zone — densité suffisante")
+            bullets.append(f"{v} habitants dans la zone -- densite suffisante")
         if v := val("taxable_households_share"):
-            bullets.append(f"{v} de foyers imposables — tissu CSP+ présent")
-        return bullets or ["Attractivité démographique favorable"]
+            bullets.append(f"{v} de foyers imposables -- tissu CSP+ present")
+        return bullets or ["Attractivite demographique favorable"]
 
     elif quadrant == "opportunites":
         bullets = []
         if v := val("competitor_count_15min"):
-            bullets.append(f"Seulement {v} concurrents en 15 min — marché peu saturé")
+            bullets.append(f"Seulement {v} concurrents en 15 min -- marche peu sature")
         if v := val("real_estate_price_house_m2"):
-            bullets.append(f"Immobilier à {v} — zone accessible aux franchisés")
+            bullets.append(f"Immobilier a {v} -- zone accessible aux franchises")
         if v := val("population_growth_5y"):
-            bullets.append(f"Croissance population {v} — dynamique démographique positive")
-        bullets.append("Aucune offre premium positionnée sur la zone")
+            bullets.append(f"Croissance population {v} -- dynamique demographique positive")
+        bullets.append("Aucune offre premium positionnee sur la zone")
         return bullets
 
     elif quadrant == "faiblesses":
         bullets = []
         if v := val("unemployment_rate"):
-            bullets.append(f"Taux de chômage {v} — recrutement à anticiper")
+            bullets.append(f"Taux de chomage {v} -- recrutement a anticiper")
         if v := val("car_dependency_share"):
-            bullets.append(f"Dépendance voiture {v} — politique mobilité RH nécessaire")
+            bullets.append(f"Dependance voiture {v} -- politique mobilite RH necessaire")
         if v := val("care_worker_pool"):
-            bullets.append(f"Bassin soins {v} pers. — marché du travail tendu sur ce profil")
-        return bullets or ["Bassin d'emploi à consolider"]
+            bullets.append(f"Bassin soins {v} pers. -- marche du travail tendu sur ce profil")
+        return bullets or ["Bassin d'emploi a consolider"]
 
     elif quadrant == "menaces":
         bullets = []
         if v := val("competitor_count_15min"):
-            bullets.append(f"{v} acteurs existants — veille concurrentielle recommandée")
+            bullets.append(f"{v} acteurs existants -- veille concurrentielle recommandee")
         if v := val("franchise_brand_count"):
-            bullets.append(f"{v} franchises nationales présentes — notoriété à construire")
-        bullets.append("Complexité réglementaire SAAD — agrément départemental requis")
-        return bullets or ["Environnement réglementaire à surveiller"]
+            bullets.append(f"{v} franchises nationales presentes -- notoriete a construire")
+        bullets.append("Complexite reglementaire SAAD -- agrement departemental requis")
+        return bullets or ["Environnement reglementaire a surveiller"]
 
     return []
 
 
 def _swot_quadrants(study: Study) -> List[Dict[str, Any]]:
-    # Fix 1 — mapper sur les vrais score_ids : scr_{name} (ex: scr_market_attractiveness)
     score_by_id = {s.score_id: s for s in study.scores}
-
     mapping = [
         ("Forces",       "forces",       ["scr_market_attractiveness", "scr_premium_potential", "scr_recurring_revenue_potential"]),
         ("Faiblesses",   "faiblesses",   ["scr_execution_risk", "scr_rh_feasibility"]),
-        ("Opportunités", "opportunites", ["scr_recurring_revenue_potential", "scr_premium_potential"]),
+        ("Opportunites", "opportunites", ["scr_recurring_revenue_potential", "scr_premium_potential"]),
         ("Menaces",      "menaces",      ["scr_competitive_pressure", "scr_regulatory_complexity"]),
     ]
-
     quadrants: List[Dict[str, Any]] = []
     for quadrant_label, quadrant_key, candidates in mapping:
         score = None
@@ -134,24 +123,13 @@ def _swot_quadrants(study: Study) -> List[Dict[str, Any]]:
             if sid in score_by_id:
                 score = score_by_id[sid]
                 break
-        # Chantier C — bullets déterministes depuis les métriques réelles
         bullets = _swot_bullets_from_data(study, quadrant_key)
         if score:
-            quadrants.append({
-                "label": quadrant_label,
-                "value": f"{round(score.value)}/100",
-                "trend": score.label,        # nom lisible du score (ex : "Attractivité marché")
-                "fallback_used": False,
-                "bullets": bullets,          # nouveauté Sprint 2
-            })
+            quadrants.append({"label": quadrant_label, "value": f"{round(score.value)}/100",
+                "trend": score.label, "fallback_used": False, "bullets": bullets})
         else:
-            quadrants.append({
-                "label": quadrant_label,
-                "value": "Non calculé",
-                "trend": None,
-                "fallback_used": True,
-                "bullets": bullets,
-            })
+            quadrants.append({"label": quadrant_label, "value": "Non calcule",
+                "trend": None, "fallback_used": True, "bullets": bullets})
     return quadrants
 
 
@@ -165,10 +143,7 @@ def _action_steps(study: Study) -> List[Dict[str, Any]]:
 
 
 def build_slide_data_5_0(study: Study, section_id: str, expected_kpis: List[str], display_name: str | None = None) -> Dict[str, Any]:
-    # FIX: utiliser display_name depuis section_registry (FR) plutôt qu'auto-générer
-    # depuis section_id en anglais ("Employment Talent" → "Emploi & vivier RH").
     title = display_name or section_id.replace("_", " ").title()
-    # Fix 3 — normaliser le verdict (évite "VerdictEnum.NO_GO")
     verdict_str = _format_verdict(study.verdict)
     base = {
         "title": title,
@@ -181,42 +156,80 @@ def build_slide_data_5_0(study: Study, section_id: str, expected_kpis: List[str]
 
     n = study.narratives or {}
     if section_id == "cover":
-        base.update({
-            "hero_kpis": _hero_kpis(study, expected_kpis),
-        })
+        base.update({"hero_kpis": _hero_kpis(study, expected_kpis)})
+
     elif section_id in {"target_segments", "competition_mapping"}:
-        base.update({
-            "columns": _columns(study, expected_kpis),
-        })
+        base.update({"columns": _columns(study, expected_kpis)})
+
     elif section_id == "swot":
+        quadrants_data = _swot_quadrants(study)
+        swot_chart_categories = [q["label"] for q in quadrants_data]
+        swot_chart_values = []
+        for q in quadrants_data:
+            v = q.get("value", "0/100")
+            try:
+                swot_chart_values.append(float(str(v).split("/")[0]))
+            except (ValueError, TypeError):
+                swot_chart_values.append(0.0)
         base.update({
-            "quadrants": _swot_quadrants(study),
+            "quadrants": quadrants_data,
+            "swot_chart_data": {
+                "type": "bar",
+                "categories": swot_chart_categories,
+                "values": swot_chart_values,
+                "title": "Scores SWOT",
+            } if any(v > 0 for v in swot_chart_values) else None,
         })
+
     elif section_id == "verdict":
         base.update({
             "hero_kpis": _hero_kpis(study, expected_kpis),
             "narrative_text": n.get("verdict_narrative") or "",
         })
+
     elif section_id == "executive_summary":
         by_id = _metrics_by_id(study)
         all_metrics = [_format_metric(by_id.get(m)) for m in expected_kpis]
         base.update({
-            "metrics": all_metrics[:3],           # sidebar droite (3 KPI cards)
-            "metrics_extended": all_metrics,       # Fix 2 — liste complète zone gauche
+            "metrics": all_metrics[:3],
+            "metrics_extended": all_metrics,
             "chart_id": section_id,
             "narrative_text": n.get("exec_summary") or "",
         })
+
     elif section_id == "action_plan":
+        base.update({"steps": _action_steps(study)})
+
+    elif section_id == "demographics":
+        by_id = _metrics_by_id(study)
+        all_metrics = [_format_metric(by_id.get(m)) for m in expected_kpis]
+        seniors_metric = by_id.get("seniors_60_plus_share")
+        demo_chart_data = None
+        if seniors_metric and seniors_metric.get("value") is not None:
+            try:
+                seniors_share = float(seniors_metric["value"])
+                if 0 < seniors_share < 100:
+                    demo_chart_data = {
+                        "type": "pie",
+                        "categories": ["60 ans et +", "Moins de 60 ans"],
+                        "values": [seniors_share, round(100 - seniors_share, 1)],
+                        "title": "Repartition par age",
+                    }
+            except (TypeError, ValueError):
+                pass
         base.update({
-            "steps": _action_steps(study),
+            "metrics": all_metrics[:3],
+            "metrics_extended": all_metrics,
+            "chart_id": section_id,
+            "demographics_chart_data": demo_chart_data,
         })
+
     else:
-        # Fix 2 — toutes les métriques disponibles pour la zone gauche (kpi_list)
         by_id = _metrics_by_id(study)
         all_metrics = [_format_metric(by_id.get(m)) for m in expected_kpis]
         base.update({
-            "metrics": all_metrics[:3],           # sidebar droite (3 KPI cards)
-            "metrics_extended": all_metrics,       # zone gauche : liste complète
+            "metrics": all_metrics[:3],
+            "metrics_extended": all_metrics,
             "chart_id": section_id,
         })
     return base
@@ -227,4 +240,11 @@ def collect_expected_strings(slide_data: Dict[str, Any]) -> List[str]:
     if isinstance(slide_data, dict):
         for key, value in slide_data.items():
             if isinstance(value, str):
-                strings.ap
+                strings.append(value)
+            elif isinstance(value, list):
+                for item in value:
+                    if isinstance(item, dict):
+                        for v in item.values():
+                            if isinstance(v, str):
+                                strings.append(v)
+    return strings
