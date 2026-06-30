@@ -31,6 +31,7 @@ def notify_front(
     if not url or not secret:
         logger.debug("[progress-notifier] FRONT_WEBHOOK_URL ou GENERATION_WEBHOOK_SECRET non configuré — skip")
         return
+    print(f"[notify_front] → {url} study={study_id} status={status} progress={progress}", flush=True)
     try:
         import httpx
         files: dict = {"study_id": (None, study_id), "status": (None, status)}
@@ -49,10 +50,13 @@ def notify_front(
             files["error_message"] = (None, error_message[:2000])
         if pptx_bytes:
             files["file_pptx"] = (f"{study_id}.pptx", io.BytesIO(pptx_bytes), "application/vnd.openxmlformats-officedocument.presentationml.presentation")
-        resp = httpx.post(url, headers={"Authorization": f"Bearer {secret}"}, files=files, timeout=30.0)
+        resp = httpx.post(url, headers={"Authorization": f"Bearer {secret}"}, files=files, timeout=60.0)
+        print(f"[notify_front] ← HTTP {resp.status_code} study={study_id} status={status}", flush=True)
         if resp.status_code >= 400:
+            print(f"[notify_front] ERREUR body={resp.text[:500]}", flush=True)
             logger.warning("[progress-notifier] HTTP %s pour study_id=%s status=%s", resp.status_code, study_id, status)
         else:
             logger.debug("[progress-notifier] OK %s study_id=%s status=%s progress=%s", resp.status_code, study_id, status, progress)
     except Exception as exc:
+        print(f"[notify_front] EXCEPTION study={study_id}: {exc}", flush=True)
         logger.exception("[progress-notifier] échec notification pour study_id=%s : %s", study_id, exc)

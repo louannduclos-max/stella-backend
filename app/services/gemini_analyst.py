@@ -33,10 +33,10 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-# Gemini 1.5 Flash — rapide, peu coûteux, JSON natif
+# Gemini 2.0 Flash — rapide, peu coûteux, JSON natif
 _GEMINI_URL = (
     "https://generativelanguage.googleapis.com/v1beta/models/"
-    "gemini-1.5-flash:generateContent"
+    "gemini-2.0-flash:generateContent"
 )
 _GEMINI_TIMEOUT_S = 25
 

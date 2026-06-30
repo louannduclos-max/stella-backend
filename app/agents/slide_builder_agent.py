@@ -6,6 +6,7 @@ Retourne : objets positionnés prêts pour le renderer PPTX/HTML
 
 Règle absolue : ne crée pas de positions, ne sort pas du template.
 """
+import datetime
 import json
 import logging
 import os
@@ -13,6 +14,14 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 import httpx
+
+
+class _DateEncoder(json.JSONEncoder):
+    """Sérialise date/datetime Python en ISO string."""
+    def default(self, obj: Any) -> Any:
+        if isinstance(obj, (datetime.date, datetime.datetime)):
+            return obj.isoformat()
+        return super().default(obj)
 
 logger = logging.getLogger(__name__)
 
@@ -168,10 +177,10 @@ Langue : {language}
 Tenant : {tenant_id}
 
 Template à utiliser :
-{json.dumps(template, ensure_ascii=False, indent=2)}
+{json.dumps(template, ensure_ascii=False, indent=2, cls=_DateEncoder)}
 
 Données du manifest (source de vérité) :
-{json.dumps(manifest_data, ensure_ascii=False, indent=2)}
+{json.dumps(manifest_data, ensure_ascii=False, indent=2, cls=_DateEncoder)}
 
 Remplis les slots du template avec les données du manifest.
 """

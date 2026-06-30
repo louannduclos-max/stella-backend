@@ -9,9 +9,6 @@ _SUPABASE_URL: str = os.environ["SUPABASE_URL"]
 _SUPABASE_KEY: str = os.environ["SUPABASE_SERVICE_ROLE_KEY"]
 _TABLE = "study_generated_data"
 
-# Log diagnostique au démarrage (URL seulement, pas la clé)
-_project_id = _SUPABASE_URL.replace("https://", "").split(".")[0]
-print(f"[DIAG] studies_repo: SUPABASE_URL project_id={_project_id}", flush=True)
 
 class StudiesRepository:
     def __init__(self) -> None:
