@@ -11,7 +11,7 @@ _TABLE = "study_generated_data"
 
 # Log diagnostique au démarrage (URL seulement, pas la clé)
 _project_id = _SUPABASE_URL.replace("https://", "").split(".")[0]
-logger.info("[studies_repo] Supabase project_id=%s", _project_id)
+print(f"[DIAG] studies_repo: SUPABASE_URL project_id={_project_id}", flush=True)
 
 class StudiesRepository:
     def __init__(self) -> None:
