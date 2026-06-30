@@ -55,7 +55,9 @@ class CompetitionCollector(BaseCollector):
             franchises = classification15.get("franchises", 0)
             associations = classification15.get("associations", 0)
             brand_flag = classification15.get("brand_presence_flag", 0)
-            top_density = min(100, round(franchises * 8 + count_15 * 1.5))
+            top_density_raw = round(franchises * 8 + count_15 * 1.5)
+            top_density_capped = top_density_raw >= 100
+            top_density = min(100, top_density_raw)
             fallback = False
             note = f"Google Places live - {count_15} acteurs à 15 min, {count_30} à 30 min."
             grade = ConfidenceGrade.B
@@ -66,6 +68,7 @@ class CompetitionCollector(BaseCollector):
             associations = DEFAULT_METRIC_BASELINES["association_competitor_count"]
             brand_flag = DEFAULT_METRIC_BASELINES["brand_presence_flag"]
             top_density = DEFAULT_METRIC_BASELINES["top_competitor_density"]
+            top_density_capped = False
             fallback = True
             note = "Google Places non disponible - estimation nationale appliquée."
             grade = ConfidenceGrade.D
@@ -79,7 +82,8 @@ class CompetitionCollector(BaseCollector):
                 GeoLevel.MUNICIPALITY, sids, grade, fallback=fallback, fallback_note=note),
             self._new_metric("top_competitor_density", "Densité top concurrents",
                 top_density, "indice", "latest",
-                GeoLevel.MUNICIPALITY, sids, grade, fallback=fallback),
+                GeoLevel.MUNICIPALITY, sids, grade, fallback=fallback or top_density_capped,
+                fallback_note=note if (fallback or top_density_capped) else None),
             self._new_metric("brand_presence_flag", "Présence grand réseau",
                 brand_flag, "bool", "latest",
                 GeoLevel.MUNICIPALITY, sids, grade, fallback=fallback),

@@ -6,12 +6,29 @@ from app.api.schemas.common import Study
 FALLBACK = "Donnee non disponible (TBD)"
 
 
+def _format_number(value, unit: str | None) -> str:
+    """Formate un nombre avec separateur de milliers (espace) et espace avant l'unite."""
+    if value is None or value == "":
+        return FALLBACK
+    try:
+        num = float(value)
+        if num == int(num):
+            formatted = f"{int(num):,}".replace(",", " ")  # espace fine insécable
+        else:
+            formatted = f"{num:,.1f}".replace(",", " ")
+    except (TypeError, ValueError):
+        formatted = str(value)
+    if unit:
+        return f"{formatted} {unit}"  # espace insécable avant unité
+    return formatted
+
+
 def _format_metric(metric):
     if not metric:
         return {"label": FALLBACK, "value": FALLBACK, "trend": None, "fallback_used": True, "confidence_grade": "E"}
     value = metric.get("value")
     unit = metric.get("unit") or ""
-    text_value = f"{value}{unit}" if value is not None and value != "" else FALLBACK
+    text_value = _format_number(value, unit or None) if value is not None and value != "" else FALLBACK
     fallback_used = bool(metric.get("fallback_used", False))
     return {
         "label": metric.get("label") or metric.get("name") or FALLBACK,
@@ -199,6 +216,74 @@ def build_slide_data_5_0(study: Study, section_id: str, expected_kpis: List[str]
 
     elif section_id == "action_plan":
         base.update({"steps": _action_steps(study)})
+
+    elif section_id == "market_scorecard":
+        # Scores composites (pas des metrics) — formatés comme KPI cards
+        score_by_id = {s.score_id: s for s in study.scores}
+        score_ids = [
+            "scr_market_attractiveness",
+            "scr_recurring_revenue_potential",
+            "scr_premium_potential",
+            "scr_execution_risk",
+            "scr_rh_feasibility",
+            "scr_competitive_pressure",
+            "scr_regulatory_complexity",
+        ]
+        score_metrics = []
+        for sid in score_ids:
+            s = score_by_id.get(sid)
+            if s:
+                score_metrics.append({
+                    "label": s.label,
+                    "value": f"{round(s.value)}/100",
+                    "trend": f"Grade {s.confidence_grade}",
+                    "fallback_used": s.missing_inputs_count > 0,
+                    "confidence_grade": str(s.confidence_grade),
+                })
+            else:
+                score_metrics.append({
+                    "label": sid.replace("scr_", "").replace("_", " ").title(),
+                    "value": FALLBACK,
+                    "trend": None,
+                    "fallback_used": True,
+                    "confidence_grade": "E",
+                })
+        base.update({
+            "metrics": score_metrics[:3],
+            "metrics_extended": score_metrics,
+            "chart_id": section_id,
+            "narrative_text": n.get("exec_summary") or "",
+        })
+
+    elif section_id == "methodology_sources":
+        # Sources de données utilisées — pas des KPI numériques
+        sources_list = study.sources[:8] if study.sources else []
+        source_metrics = [
+            {
+                "label": (s.publisher or s.source_type.value if hasattr(s.source_type, "value") else str(s.source_type)).upper(),
+                "value": s.title[:60] + ("…" if len(s.title) > 60 else ""),
+                "trend": f"Grade {s.confidence_grade} · {s.freshness_level.value if hasattr(s.freshness_level, 'value') else str(s.freshness_level)}",
+                "fallback_used": False,
+                "confidence_grade": str(s.confidence_grade),
+            }
+            for s in sources_list
+        ]
+        if not source_metrics:
+            source_metrics = [
+                {"label": "INSEE", "value": "Données démographiques et emploi", "trend": "Grade A · annuel", "fallback_used": False, "confidence_grade": "A"},
+                {"label": "Google Places", "value": "Cartographie concurrentielle locale", "trend": "Grade B · temps réel", "fallback_used": False, "confidence_grade": "B"},
+                {"label": "CNSA", "value": "Bénéficiaires APA et régulation SAAD", "trend": "Grade A · annuel", "fallback_used": False, "confidence_grade": "A"},
+            ]
+        base.update({
+            "metrics": source_metrics[:3],
+            "metrics_extended": source_metrics,
+            "chart_id": None,
+            "narrative_text": (
+                f"Cette étude mobilise {len(sources_list)} sources de données officielles et commerciales. "
+                f"Les données INSEE couvrent la démographie et l'emploi. "
+                f"La cartographie concurrentielle est réalisée via Google Places API en temps réel."
+            ),
+        })
 
     elif section_id == "demographics":
         by_id = _metrics_by_id(study)

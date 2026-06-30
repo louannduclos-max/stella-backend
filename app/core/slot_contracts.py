@@ -136,8 +136,16 @@ SECTION_EXPECTED_KPIS = {
         "real_estate_price_house_m2",
         "competitor_count_15min",
     ],
-    "methodology_sources": [],
-    "market_scorecard": [],
+    "methodology_sources": [],  # branche dédiée dans slide_data_builder (study.sources)
+    "market_scorecard": [      # branche dédiée dans slide_data_builder (study.scores)
+        "scr_market_attractiveness",
+        "scr_recurring_revenue_potential",
+        "scr_premium_potential",
+        "scr_execution_risk",
+        "scr_rh_feasibility",
+        "scr_competitive_pressure",
+        "scr_regulatory_complexity",
+    ],
     "demographics": [
         "population_total",
         "population_growth_5y",

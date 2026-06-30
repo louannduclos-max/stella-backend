@@ -33,10 +33,10 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-# Gemini 2.0 Flash — rapide, peu coûteux, JSON natif
+# Gemini 2.5 Flash — rapide, peu coûteux, JSON natif (2.0-flash déprécié juin 2026)
 _GEMINI_URL = (
     "https://generativelanguage.googleapis.com/v1beta/models/"
-    "gemini-2.0-flash:generateContent"
+    "gemini-2.5-flash:generateContent"
 )
 _GEMINI_TIMEOUT_S = 25
 
@@ -82,8 +82,10 @@ def _template_narratives(study: "Study") -> dict:
     top_score = scores_sorted[0] if scores_sorted else None
     weak_score = scores_sorted[-1] if len(scores_sorted) > 1 else None
 
-    top_label = f"une {top_score.label.lower()} élevée" if top_score else "des atouts identifiés"
-    weak_label = f"une {weak_score.label.lower()} à surveiller" if weak_score else "des points de vigilance"
+    top_score_label = top_score.label if top_score else "atouts"
+    top_score_value = f"{top_score.value:.0f}" if top_score else "—"
+    weak_score_label = weak_score.label if weak_score else "points de vigilance"
+    weak_score_value = f"{weak_score.value:.0f}" if weak_score else "—"
 
     # Concurrence
     comp_scores = [s for s in (study.scores or []) if "competi" in s.score_id.lower()]
@@ -96,7 +98,8 @@ def _template_narratives(study: "Study") -> dict:
     return {
         "verdict_narrative": (
             f"Le marché de {city} présente un potentiel {verdict_fr} pour {brand}. "
-            f"L'analyse révèle {top_label} et {weak_label}. "
+            f"Le score le plus fort est {top_score_label} ({top_score_value}/100) "
+            f"et le point de vigilance principal est {weak_score_label} ({weak_score_value}/100). "
             f"Ce résultat s'appuie sur 7 axes stratégiques couvrant démographie, "
             f"concurrence, RH et régulation."
         ),
@@ -242,7 +245,7 @@ def generate_narratives(study: "Study") -> dict:
             logger.warning("[gemini_analyst] clés manquantes %s — fallback template", missing)
             return _template_narratives(study)
 
-        result["generated_by"] = "gemini-1.5-flash"
+        result["generated_by"] = "gemini-2.5-flash"
         logger.info(
             "[gemini_analyst] narratifs Gemini générés pour study=%s city=%s",
             study.study_id, study.geo_scope.city,

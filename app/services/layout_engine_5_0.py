@@ -188,6 +188,38 @@ def _layout_grid_asymmetric_3columns(slide_data):
     return objects
 
 
+def _swot_card(idx: int, left: int, top: int, width: int, height: int,
+               label: str, value: str, description: str | None,
+               bullets: list | None) -> Dict[str, Any]:
+    """Carte SWOT avec bullets — remplace _kpi_card pour le slide SWOT."""
+    children: List[Dict[str, Any]] = [
+        {"role": "label", "text": label,
+         "style": {"font_size": 16, "font_weight": 700, "color": "var(--primary-color)",
+                   "text_transform": "uppercase", "letter_spacing": "0.05em"}},
+        {"role": "score", "text": value,
+         "style": {"font_size": 28, "font_weight": 800, "color": "var(--secondary-color)"}},
+    ]
+    if description:
+        children.append({
+            "role": "description", "text": description,
+            "style": {"font_size": 13, "color": "var(--text-muted)"},
+        })
+    for bullet in (bullets or [])[:4]:
+        children.append({
+            "role": "bullet", "text": f"• {bullet}",
+            "style": {"font_size": 13, "line_height": 1.5, "color": "var(--text-dark)"},
+        })
+    return {
+        "id": f"swot-card-{idx:02d}",
+        "data_object": True,
+        "data_object_type": "shape",
+        "left": left, "top": top, "width": width, "height": height,
+        "style": {"background": "var(--bg-light)", "border": "1px solid rgba(226, 232, 240, 0.8)",
+                  "border_radius": 8, "padding": 24},
+        "children": children,
+    }
+
+
 def _layout_matrix_4quadrants(slide_data):
     title = slide_data.get("title") or "Donnee non disponible (TBD)"
     eyebrow = slide_data.get("eyebrow") or "SWOT"
@@ -205,9 +237,13 @@ def _layout_matrix_4quadrants(slide_data):
     ]
     for idx, (pos, quadrant) in enumerate(zip(positions, quadrants), start=1):
         left, top = pos
-        objects.append(_kpi_card(idx, left, top, quadrant_width, quadrant_height,
-            quadrant.get("label") or "TBD", quadrant.get("value") or "TBD",
-            quadrant.get("trend"), quadrant.get("fallback_used", False)))
+        objects.append(_swot_card(
+            idx=idx, left=left, top=top, width=quadrant_width, height=quadrant_height,
+            label=quadrant.get("label") or "TBD",
+            value=quadrant.get("value") or "TBD",
+            description=quadrant.get("trend"),
+            bullets=quadrant.get("bullets"),
+        ))
     return objects
 
 
