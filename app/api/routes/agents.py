@@ -431,6 +431,16 @@ def debug_html_slide(
     from app.services.slides_5_0_builder import _prepare_section_data
     section_data = _prepare_section_data(study, section_id, manifest)
 
+    # Sprint 13c — cache branché sur le debug (même clé que la prod) :
+    # une slide validée QA est FIGÉE (fini la roulette Gemini à chaque affichage),
+    # et la galerie devient quasi instantanée. Invalidation auto par SKILL_VERSION.
+    from fastapi.responses import Response as _Resp
+    from app.services.slide_cache import cache_get, cache_set, slide_cache_key
+    _cache_key = slide_cache_key(section_id, section_data)
+    _cached = cache_get(_cache_key)
+    if _cached:
+        return _Resp(content=_cached, media_type="text/html")
+
     logger.info(
         "[debug/html-slide] study=%s section=%s data_keys=%s",
         study_id, section_id, list(section_data.keys()),
@@ -482,6 +492,7 @@ def debug_html_slide(
 
     if qa_ok:
         logger.info("[debug/html-slide] QA OK — slide HTML retournée")
+        cache_set(_cache_key, full_html)  # Sprint 13c : figer la slide validée
         return FastAPIResponse(content=full_html, media_type="text/html")
     else:
         logger.warning(
