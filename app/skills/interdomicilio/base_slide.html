@@ -304,9 +304,23 @@
 
     /* ── Main content zone ───────────────────────────────────────────── */
     .slide-body {
-      padding: 20px 32px 52px;
+      padding: 20px 32px 12px;
       position: relative;
+      /* Sprint 14d — hauteur EXPLICITE de la zone utile (720 - header 80 -
+         footer 36). Sans elle, les height:100% des wrappers de centrage ne
+         fonctionnent pas → contenu collé en haut, vide en bas (constaté sur
+         cover/concurrence/sources Nantes). flex column : la strategic-box
+         finale peut se pousser en bas avec margin-top:auto. */
+      height: 604px;
+      box-sizing: border-box;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
     }
+    /* Le contenu généré est enfant direct : lui donner la pleine hauteur */
+    .slide-body > * { flex-shrink: 0; }
+    .slide-body .fill-height { flex: 1 1 auto; }
+    .slide-body .push-bottom { margin-top: auto; }
 
     /* ── KPI cards (ligne de métriques) ─────────────────────────────── */
     .kpi-row {
