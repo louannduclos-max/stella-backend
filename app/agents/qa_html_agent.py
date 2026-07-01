@@ -78,8 +78,9 @@ def _extract_visible_numbers(html: str) -> list[tuple[str, str]]:
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _manifest_flat_text(manifest: dict) -> str:
-    """Sérialise le manifest en texte plat pour la recherche de nombres."""
-    return json.dumps(manifest, ensure_ascii=False)
+    """Sérialise le manifest en texte plat pour la recherche de nombres.
+    default=str gère les date/datetime non sérialisables."""
+    return json.dumps(manifest, ensure_ascii=False, default=str)
 
 
 def _is_traceable(number: str, manifest_text: str) -> bool:
