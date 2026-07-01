@@ -113,7 +113,9 @@ _DEFAULT_MAX_TOKENS = 6144
 # Clés de contexte injectées par _prepare_section_data (pipeline) — internes et sûres.
 # Fix Sprint 13 : le double filtrage (_prepare_section_data puis _filter_section_data)
 # les jetait, l'agent perdait zone/brand_name référencés par les .md des sections.
-_BASE_CONTEXT_KEYS = ("zone", "brand_name", "year", "language")
+# Sprint 14a : + "intent" (variables wizard + brand profile = le prompt structuré
+# du client) — transmis à toutes les sections pour adapter l'angle d'analyse.
+_BASE_CONTEXT_KEYS = ("zone", "brand_name", "year", "language", "intent")
 
 
 def _filter_section_data(section_id: str, manifest: dict) -> dict:
@@ -202,6 +204,13 @@ Règles ABSOLUES :
    côte à côte plutôt qu'empilement, tailles réduites, listes tronquées aux
    maxima des instructions. Une slide aux deux tiers vide OU qui déborde est
    un ÉCHEC de mise en page.
+11. INTENTION CLIENT : le JSON peut contenir un objet `intent` (type d'étude,
+   objectif, services visés `service_scope`, segments cibles, positionnement).
+   C'est la demande du client — adapte l'ANGLE : mets en avant les KPI liés
+   aux services et segments visés, et oriente la recommandation de la
+   strategic-box vers `study_goal` et `positioning_mode`. `intent` ne contient
+   AUCUNE donnée de marché : n'en tire jamais un chiffre, uniquement l'angle
+   éditorial.
 """
 
 def _build_prompt(

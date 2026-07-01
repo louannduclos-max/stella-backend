@@ -95,6 +95,21 @@ class MasterJsonBuilder:
             # sans verdict. Valeur string ("GO"/"GO_CONDITIONAL"/"NO_GO").
             "verdict": (study.verdict.value if hasattr(study.verdict, "value")
                         else study.verdict),
+            # Sprint 14a — COUCHE INTENTION : le wizard est le "prompt structuré"
+            # du client et le brand profile son cadre. Ces variables existaient
+            # (BusinessContext) mais n'atteignaient jamais les slides.
+            # Transmis à TOUTES les sections via _filter_section_data.
+            "intent": {
+                "study_type": study.study_type,
+                "study_goal": study.business_context.study_goal,
+                "business_model": study.business_context.business_model,
+                "service_scope": study.business_context.service_scope,
+                "positioning_mode": study.business_context.positioning_mode,
+                "target_customer_segments": study.business_context.target_customer_segments,
+                "pricing_positioning": study.business_context.pricing_positioning,
+                "brand_context": (study.brand_profile_override or {}).get("brand_context")
+                                 or (study.brand_profile_override or {}).get("description"),
+            },
             # ─── Data-Depth sprint ────────────────────────────────────────────
             # Concurrents nommés Google Places (Chantier 2)
             "competitors_top": competitors_top,          # jusqu'à 10 acteurs nommés

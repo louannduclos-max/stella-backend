@@ -202,6 +202,9 @@ def _prepare_section_data(study: Study, section_id: str, manifest: dict) -> dict
         "brand_name": study.business_context.brand_name or "",
         "year": "2026",
         "language": study.language or "fr",
+        # Sprint 14a — l'intention client (wizard + brand profile) accompagne
+        # chaque section : le manifest la porte au top-level ("intent").
+        "intent": manifest.get("intent"),
     })
     return data
 
