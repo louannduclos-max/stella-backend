@@ -32,10 +32,21 @@ class CompetitionCollector(BaseCollector):
         city = study.geo_scope.city or ""
         live15, live30, classification15 = self._fetch_live(country, lat, lon, city=city)
 
+        # Titre et URL distincts selon l'API utilisee (traceabilite logs)
+        _src_title = (
+            "Google Places API (New) - Text Search acteurs SAP"
+            if USE_NEW_PLACES_API
+            else "Google Places API - acteurs SAP locaux"
+        )
+        _src_url = (
+            "https://places.googleapis.com/v1/places:searchText"
+            if USE_NEW_PLACES_API
+            else "https://maps.googleapis.com/maps/api/place/nearbysearch"
+        )
         src = self._new_source(
             country=country,
-            title="Google Places API - acteurs SAP locaux",
-            url="https://maps.googleapis.com/maps/api/place/nearbysearch",
+            title=_src_title,
+            url=_src_url,
             publisher="Google Places",
             source_type=SourceType.COMMERCIAL,
             authority_level=3,
@@ -67,13 +78,21 @@ class CompetitionCollector(BaseCollector):
             top_density_capped = top_density_raw >= 100
             top_density = min(100, top_density_raw)
             fallback = False
-            note = f"Google Places live - {count_15} acteurs à 15 min, {count_30} à 30 min."
+            if USE_NEW_PLACES_API:
+                note = (
+                    f"Google Places New API (Text Search) - {count_15} acteurs. "
+                    f"Sans rayon : count_30=count_15 (estimation, pas de distinction 15/30 min)."
+                )
+            else:
+                note = f"Google Places live - {count_15} acteurs a 15 min, {count_30} a 30 min."
             grade = ConfidenceGrade.B
             # Construire la liste nommée de concurrents (Chantier 2 Data-Depth)
             brand_profile = study.brand_profile_override or {}
             direct_names = brand_profile.get("direct_competitors")
+            # source_id distinct pour New API (spec : traceabilite)
+            _competitor_source_id = "google_places_new" if USE_NEW_PLACES_API else src.source_id
             study.competitors = build_competitors_from_places(
-                live15, direct_competitor_names=direct_names, source_id=src.source_id,
+                live15, direct_competitor_names=direct_names, source_id=_competitor_source_id,
             )
         else:
             count_15 = DEFAULT_METRIC_BASELINES["competitor_count_15min"]

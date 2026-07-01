@@ -1,39 +1,30 @@
 """
-Cache HTML des slides — Sprint 9 (E).
+Cache HTML des slides — Sprint 9 (E) + Sprint 10 (Chantier C).
 
 POURQUOI :
-  Gemini coûte ~$0.001–0.005 par appel. 15 slides × N études = coût cumulatif.
-  Régénérer une étude identique (même section_data) doit coûter 0 appel Gemini.
+  Gemini coute ~$0.001-0.005 par appel. 15 slides x N etudes = cout cumulatif.
+  Regenerer une etude identique (meme section_data) doit couter 0 appel Gemini.
 
-CLÉ DE CACHE STABLE (faille v2 corrigée) :
-  v2 utilisait json.dumps(section_data) sans précautions → instable si :
+CLE DE CACHE STABLE (faille v2 corrigee) :
+  v2 utilisait json.dumps(section_data) sans precautions -> instable si :
   - section_data contient des objets Pydantic ou des dates Python
-  - L'ordre des clés varie selon Python version
-  Solution : sérialisation canonique (sort_keys=True, default=str)
+  - L'ordre des cles varie selon Python version
+  Solution : serialisation canonique (sort_keys=True, default=str)
   + SKILL_VERSION pour invalider le cache lors de changements de skill.
+
+SKILL_VERSION AUTOMATIQUE (Sprint 10 Chantier C) :
+  Plus de bump manuel : la version est le hash du contenu des fichiers skill.
+  Modifier un .md, .html, .json, .css -> hash change -> cache invalide auto.
+  Calcule au demarrage du process, pas a chaque appel.
 
 STOCKAGE :
   Table Supabase : slide_html_cache (key TEXT PK, html TEXT, created_at TIMESTAMPTZ)
-  Créer avec :
-    CREATE TABLE IF NOT EXISTS slide_html_cache (
-      key TEXT PRIMARY KEY,
-      html TEXT NOT NULL,
-      created_at TIMESTAMPTZ DEFAULT now()
-    );
-
-BUMP SKILL_VERSION quand le skill change :
-  - Modification de base_slide.html
-  - Modification d'un fichier sections/*.md
-  → Sinon on servirait du vieux HTML avec le nouveau skill
 
 UTILISATION :
-  # Avant Gemini
   key = slide_cache_key(section_id, section_data)
   cached = cache_get(key)
   if cached:
       return cached
-
-  # Après Gemini
   html = call_gemini(...)
   cache_set(key, html)
   return html
@@ -43,30 +34,50 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-# Bumper à chaque changement de skill (base_slide.html ou sections/*.md)
-# Format : "MAJOR.MINOR.PATCH"
-SKILL_VERSION = "1.0.0"
+# Sprint 10 (Chantier C) : SKILL_VERSION = hash automatique des fichiers skill.
+# Plus de bump manuel. Modifier un .md ou .html -> hash change -> cache invalide.
+_SKILL_DIR = Path(__file__).parent.parent / "skills" / "interdomicilio"
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Clé de cache
-# ─────────────────────────────────────────────────────────────────────────────
+def _compute_skill_version() -> str:
+    """Hash SHA256 de tous les fichiers du skill (html, md, json, css).
+    Calcule au demarrage du process. Change automatiquement a chaque modif."""
+    h = hashlib.sha256()
+    try:
+        for f in sorted(_SKILL_DIR.rglob("*")):
+            if f.is_file() and f.suffix in {".html", ".md", ".json", ".css"}:
+                h.update(f.read_bytes())
+        version = h.hexdigest()[:12]
+        logger.info("[slide_cache] SKILL_VERSION auto = %s", version)
+        return version
+    except Exception as exc:
+        logger.warning("[slide_cache] SKILL_VERSION fallback '0.0.0': %s", exc)
+        return "0.0.0"
+
+
+SKILL_VERSION = _compute_skill_version()  # calcule au demarrage, jamais a la main
+
+
+# -----------------------------------------------------------------------------
+# Cle de cache
+# -----------------------------------------------------------------------------
 
 def slide_cache_key(section_id: str, section_data: dict) -> str:
     """
-    Génère une clé de cache stable et déterministe pour une slide HTML.
+    Genere une cle de cache stable et deterministe pour une slide HTML.
 
-    Stabilité garantie par :
-    - sort_keys=True : ordre des clés canonique
-    - default=str : gère les dates Python (sinon crash)
-    - ensure_ascii=True : évite les variations d'encodage
-    - Préfixe SKILL_VERSION : invalide le cache si le skill change
+    Stabilite garantie par :
+    - sort_keys=True : ordre des cles canonique
+    - default=str : gere les dates Python (sinon crash)
+    - ensure_ascii=True : evite les variations d'encodage
+    - Prefixe SKILL_VERSION : invalide le cache si le skill change
 
     Returns:
-        Clé courte et lisible (préfixe "slide_html:" + 20 chars hex)
+        Cle courte et lisible (prefixe "slide_html:" + 20 chars hex)
     """
     canonical = json.dumps(
         section_data,
@@ -79,13 +90,13 @@ def slide_cache_key(section_id: str, section_data: dict) -> str:
     return f"slide_html:{h[:20]}"
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Opérations Supabase
-# ─────────────────────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------------------
+# Operations Supabase
+# -----------------------------------------------------------------------------
 
 def cache_get(key: str) -> str | None:
     """
-    Récupère le HTML en cache pour une clé donnée.
+    Recupere le HTML en cache pour une cle donnee.
     Retourne None si absent ou si Supabase est indisponible.
     """
     try:
@@ -99,7 +110,7 @@ def cache_get(key: str) -> str | None:
         logger.debug("[slide_cache] MISS %s", key)
         return None
     except Exception as exc:
-        # Le cache est best-effort : une erreur Supabase ne doit pas bloquer la génération
+        # Le cache est best-effort : une erreur Supabase ne bloque pas la generation
         logger.warning("[slide_cache] get failed (%s): %s", key, exc)
         return None
 

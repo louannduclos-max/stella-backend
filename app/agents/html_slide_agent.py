@@ -43,6 +43,56 @@ _GEMINI_TIMEOUT_S = 45
 
 SKILLS_DIR = Path(__file__).parent.parent / "skills"
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Chantier E — Données bornées par section + budget tokens
+# ─────────────────────────────────────────────────────────────────────────────
+# Chaque section ne recoit que les cles manifest dont elle a besoin.
+# Avantages : cout reduit, cloisonnement, pas d'invention par association.
+# L'agent ne "voit" pas les donnees des autres sections.
+#
+# INVARIANT : toutes les valeurs numeriques affichees sont dans SECTION_DATA_KEYS
+# -> le QA peut les verifier (elles sont dans le sous-manifest envoye).
+
+SECTION_DATA_KEYS: dict[str, list[str]] = {
+    "executive_summary":    ["metrics", "verdict", "score_composite",
+                             "market_sizing", "funding_scale"],
+    "benchmark_comparison": ["benchmark_rows"],
+    "funding_feasibility":  ["funding_scale", "market_sizing"],
+    "demographics":         ["demographics_pie", "metrics"],
+    "competition":          ["competitors_top", "competitors_total_count",
+                             "competition_avg_rating"],
+    "competition_mapping":  ["competitors_top", "competitors_total_count",
+                             "competition_avg_rating"],
+    "verdict":              ["verdict", "scores_radar", "score_composite"],
+    "swot":                 ["scores"],
+    "action_plan":          ["action_plan"],
+}
+
+# maxOutputTokens calibre par section — evite la troncature HTML
+# Les sections avec tableaux/graphiques ont besoin de plus de tokens
+SECTION_MAX_TOKENS: dict[str, int] = {
+    "benchmark_comparison": 4096,
+    "competition_mapping":  4096,
+    "competition":          4096,
+    "funding_feasibility":  3500,
+    "executive_summary":    3500,
+    "demographics":         3000,
+    "verdict":              3000,
+}
+_DEFAULT_MAX_TOKENS = 3000
+
+
+def _filter_section_data(section_id: str, manifest: dict) -> dict:
+    """
+    Retourne uniquement les cles manifest pertinentes pour la section.
+    Si la section n'a pas de mapping -> retourne les 8 premieres metriques (defaut safe).
+    """
+    keys = SECTION_DATA_KEYS.get(section_id)
+    if keys:
+        return {k: manifest.get(k) for k in keys}
+    # Defaut : les 8 premieres metriques (sections sans mapping explicite)
+    return {"metrics": (manifest.get("metrics") or [])[:8]}
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Chargement du skill
@@ -133,17 +183,17 @@ Commence directement par les éléments de contenu (div, table, etc.).
 # Appel Gemini
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _call_gemini_html(prompt: str, api_key: str) -> str | None:
+def _call_gemini_html(prompt: str, api_key: str, max_tokens: int = _DEFAULT_MAX_TOKENS) -> str | None:
     """Appelle Gemini et retourne le HTML brut (string) ou None."""
     url = f"{_GEMINI_URL}?key={api_key}"
     body = {
         "system_instruction": {
-            "parts": [{"text": _SYSTEM_PROMPT.replace("{LANGUAGE}", "français")}]
+            "parts": [{"text": _SYSTEM_PROMPT.replace("{LANGUAGE}", "francais")}]
         },
         "contents": [{"parts": [{"text": prompt}]}],
         "generationConfig": {
             "temperature": 0.4,
-            "maxOutputTokens": 4096,
+            "maxOutputTokens": max_tokens,
         },
     }
     try:
@@ -203,13 +253,19 @@ class HTMLSlideAgent:
         if not instructions:
             return None
 
+        # Chantier E : donnees bornees par section + budget tokens calibre
+        # section_data peut etre pre-filtre par _prepare_section_data() (pipeline).
+        # _filter_section_data assure la coherence si appel direct (endpoint debug).
+        max_tokens = SECTION_MAX_TOKENS.get(section_id, _DEFAULT_MAX_TOKENS)
+        filtered_data = _filter_section_data(section_id, section_data)
+
         prompt = _build_prompt(
             section_instructions=instructions,
-            section_data=section_data,
+            section_data=filtered_data,
             skill=skill,
             language=language,
         )
-        return _call_gemini_html(prompt, api_key)
+        return _call_gemini_html(prompt, api_key, max_tokens=max_tokens)
 
     def assemble_slide(
         self,

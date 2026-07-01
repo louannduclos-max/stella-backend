@@ -1,24 +1,27 @@
 """
-QA HTML déterministe — Sprint 9 v3 (renforcé).
+QA HTML deterministique — Sprint 9 v3 + Sprint 10 Chantier E.
 
-Sprint 8 v2 : vérifiait uniquement les nombres dans le texte visible.
-Sprint 9 v3 : ferme 3 failles supplémentaires :
-  1. Données Chart.js dans les blocs <script> (ex: data: [45321, 12000])
-     → un graphique pouvait afficher des valeurs sans traçabilité
-  2. Détection heuristique des affirmations qualitatives fausses
-     (superlatifs non sourcés : "le plus grand", "leader du marché", etc.)
-  3. Cohérence du manifest avec default=str pour les dates Python
+Sprint 8 v2 : verifiait uniquement les nombres dans le texte visible.
+Sprint 9 v3 : ferme 3 failles supplementaires :
+  1. Donnees Chart.js dans les blocs <script> (ex: data: [45321, 12000])
+  2. Detection heuristique des affirmations qualitatives non sourcees
+  3. Coherence du manifest avec default=str pour les dates Python
 
-HONNÊTETÉ SUR LES LIMITES :
-  Ce QA est heuristique — il réduit le risque d'hallucination, il ne l'annule pas.
+Sprint 10 Chantier E :
+  4. Detection de HTML tronque (balises div/table non equilibrees)
+     Un HTML tronque (maxOutputTokens atteint) serait serve tel quel dans l'iframe.
+     Check en premier pour rejeter rapidement avant les autres verifications.
+
+HONNETETE SUR LES LIMITES :
+  Ce QA est heuristique — il reduit le risque d'hallucination, il ne l'annule pas.
   La vraie garantie reste : (a) prompt strict avec source_of_truth explicite,
-  (b) température basse (0.4), (c) le fallback déterministe PPTX toujours présent.
-  Ne pas présenter ce QA comme une preuve absolue dans les handoffs.
+  (b) temperature basse (0.4), (c) le fallback deterministique PPTX toujours present.
 
 API publique :
   validate_html(html: str, manifest: dict) -> tuple[bool, list[str]]
-    ok=True si aucun problème détecté
-    issues : liste des problèmes avec catégorie préfixée (texte:, chart:, claim:)
+    ok=True si aucun probleme detecte
+    issues : liste des problemes avec categorie prefixee
+             (texte:, chart:, claim:, html_tronque:)
 """
 from __future__ import annotations
 
@@ -26,39 +29,38 @@ import json
 import re
 
 
-# ─────────────────────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------------------
 # Normalisation des nombres
-# ─────────────────────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------------------
 
 def _numbers(text: str) -> list[str]:
     """
-    Extrait les nombres significatifs d'un texte, après avoir retiré
-    les valeurs CSS (px, em, %, etc.) qui ne sont pas des données.
-    Retourne des chaînes brutes (avec éventuels séparateurs).
+    Extrait les nombres significatifs d'un texte, apres avoir retire
+    les valeurs CSS (px, em, %, etc.) qui ne sont pas des donnees.
+    Retourne des chaines brutes (avec eventuels separateurs).
     """
-    # Retire d'abord les valeurs CSS numériques pour éviter les faux positifs
     text = re.sub(r"\d+(\.\d+)?(px|em|rem|%|vh|vw|pt|s|ms|deg)\b", " ", text)
     return re.findall(r"\d[\d\s.,]*\d|\d+", text)
 
 
 def _normalize(n: str) -> str:
-    """Normalise un nombre : retire séparateurs d'espace/virgule/point pour comparaison."""
+    """Normalise un nombre : retire separateurs d'espace/virgule/point pour comparaison."""
     return re.sub(r"[\s,.]", "", n)
 
 
 def _manifest_index(manifest: dict) -> str:
     """
-    Sérialise le manifest en index texte plat pour la recherche de nombres.
-    default=str gère les date/datetime Python non sérialisables (Sprint 8 fix).
-    On normalise aussi : retire séparateurs pour comparaison uniforme.
+    Serialise le manifest en index texte plat pour la recherche de nombres.
+    default=str gere les date/datetime Python non serialisables (Sprint 8 fix).
+    On normalise aussi : retire separateurs pour comparaison uniforme.
     """
     raw = json.dumps(manifest, ensure_ascii=False, default=str)
     return re.sub(r"[\s,]", "", raw).replace(".", "")
 
 
-# ─────────────────────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------------------
 # Extraction depuis le HTML texte visible (hors <script>/<style>)
-# ─────────────────────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------------------
 
 _STRIP_SCRIPT_STYLE = re.compile(
     r"<(script|style)[^>]*>[\s\S]*?</\1>", re.IGNORECASE
@@ -66,7 +68,7 @@ _STRIP_SCRIPT_STYLE = re.compile(
 _STRIP_COMMENTS = re.compile(r"<!--[\s\S]*?-->")
 _STRIP_TAGS = re.compile(r"<[^>]+>")
 
-# Années et numéros de section : toujours whitelistés (pas de données métier)
+# Annees et numeros de section : toujours whitelistes (pas de donnees metier)
 _YEAR_PATTERN = re.compile(r"^(19|20)\d{2}$")
 
 
@@ -80,17 +82,15 @@ def _visible_text(html: str) -> str:
 
 def _check_visible_numbers(html: str, idx: str) -> list[str]:
     """
-    Faille 1 (héritée Sprint 8) : vérifie les nombres dans le texte visible.
-    Retourne les nombres suspects (non tracés dans le manifest).
+    Faille 1 (heritee Sprint 8) : verifie les nombres dans le texte visible.
+    Retourne les nombres suspects (non traces dans le manifest).
     """
     text = _visible_text(html)
     issues = []
     for raw in _numbers(text):
         clean = _normalize(raw)
-        # Ignore les nombres trop courts (chiffres isolés, indices)
         if len(clean) < 3:
             continue
-        # Whitelist : années
         if _YEAR_PATTERN.match(clean):
             continue
         if clean not in idx:
@@ -98,20 +98,17 @@ def _check_visible_numbers(html: str, idx: str) -> list[str]:
     return issues
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Extraction depuis les données Chart.js (faille v2 comblée)
-# ─────────────────────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------------------
+# Extraction depuis les donnees Chart.js (faille v2 comblee)
+# -----------------------------------------------------------------------------
 
-# Pattern Chart.js : data: [45321, 12000, 890]
 _CHARTJS_DATA = re.compile(r"\bdata\s*:\s*\[([\d\s.,]+)\]")
 
 
 def _check_chartjs_data(html: str, idx: str) -> list[str]:
     """
-    Faille v2 : les données Chart.js sont dans des blocs <script> → ignorées par
-    le QA v2. Un graphique pouvait afficher des valeurs inventées.
-
-    On extrait tous les tableaux `data: [...]` et on vérifie chaque valeur.
+    Faille v2 : les donnees Chart.js sont dans des blocs <script>.
+    On extrait tous les tableaux data: [...] et on verifie chaque valeur.
     """
     issues = []
     for arr_match in _CHARTJS_DATA.finditer(html):
@@ -127,33 +124,29 @@ def _check_chartjs_data(html: str, idx: str) -> list[str]:
     return issues
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Détection d'affirmations non sourcées (faille v2 — heuristique)
-# ─────────────────────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------------------
+# Detection d'affirmations non sourcees (faille v2 — heuristique)
+# -----------------------------------------------------------------------------
 
-# Superlatifs et claims marketing sans source → red flags
 _RED_FLAGS = [
     r"\ble plus grand\b",
     r"\ble meilleur\b",
     r"\bla meilleure\b",
-    r"\bnuméro\s*un\b",
-    r"\bleader du marché\b",
-    r"\bleader\s+incontesté\b",
+    r"\bnumero\s*un\b",
+    r"\bleader du marche\b",
+    r"\bleader\s+inconteste\b",
     r"\btoujours\b",
     r"\bgaranti\b",
-    r"\bsans\s+équivalent\b",
-    r"\binégalé\b",
-    r"\bréférence\s+absolue\b",
+    r"\bsans\s+equivalent\b",
+    r"\binegale\b",
+    r"\breference\s+absolue\b",
 ]
 
 
 def _check_red_flags(html: str) -> list[str]:
     """
-    Faille v2 : le QA ne détectait pas les affirmations qualitatives inventées.
-    Heuristique : signale les superlatifs quantitatifs non sourcés par un chiffre.
-
-    Note : best-effort — peut avoir des faux positifs (ex: un nom propre contenant
-    "meilleur"). À calibrer selon les retours terrain.
+    Faille v2 : le QA ne detectait pas les affirmations qualitatives inventees.
+    Heuristique : signale les superlatifs non sources par un chiffre.
     """
     text = _visible_text(html)
     issues = []
@@ -163,27 +156,53 @@ def _check_red_flags(html: str) -> list[str]:
     return issues
 
 
-# ─────────────────────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------------------
+# Detection de HTML tronque (Sprint 10 Chantier E)
+# -----------------------------------------------------------------------------
+
+def _check_html_structure(html: str) -> list[str]:
+    """
+    Sprint 10 Chantier E — Detection de HTML tronque.
+
+    Un HTML tronque (maxOutputTokens atteint en milieu de balise) a plus de <div>
+    ouverts que fermes. Ce check evite de servir un HTML mal forme a l'iframe.
+
+    Limite : ne detecte que les tronques nets. Un tronque entre deux <div> valides
+    passerait. Suffisant pour le cas le plus frequent (arret en milieu de tableau).
+    """
+    issues = []
+    open_divs = html.count("<div")
+    close_divs = html.count("</div>")
+    if open_divs != close_divs:
+        issues.append(f"html_tronque:div open={open_divs} close={close_divs}")
+    if html.count("<table") != html.count("</table>"):
+        issues.append("html_tronque:table non fermee")
+    return issues
+
+
+# -----------------------------------------------------------------------------
 # API publique
-# ─────────────────────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------------------
 
 def validate_html(html: str, manifest: dict) -> tuple[bool, list[str]]:
     """
-    Valide que le HTML ne contient aucun nombre non tracé ni affirmation suspecte.
+    Valide que le HTML ne contient aucun nombre non trace ni affirmation suspecte.
 
-    Vérifie :
+    Verifie (v3 Sprint 9 + Sprint 10 Chantier E) :
+    0. HTML tronque — balises div/table non equilibrees (Chantier E Sprint 10)
     1. Nombres dans le texte visible (hors CSS)
-    2. Données dans les blocs Chart.js data: [...] (faille v2)
-    3. Superlatifs/claims marketing non sourcés (faille v2)
+    2. Donnees dans les blocs Chart.js data: [...] (faille v2)
+    3. Superlatifs/claims marketing non sources (faille v2)
 
     Returns:
         (ok, issues)
-        ok=True si aucun problème
-        issues : liste préfixée "texte:", "chart:", "claim:" pour debug
+        ok=True si aucun probleme
+        issues : liste prefixee "html_tronque:", "texte:", "chart:", "claim:"
     """
     idx = _manifest_index(manifest)
 
     issues: list[str] = []
+    issues.extend(_check_html_structure(html))          # Sprint 10 : check tronque en premier
     issues.extend(_check_visible_numbers(html, idx))
     issues.extend(_check_chartjs_data(html, idx))
     issues.extend(_check_red_flags(html))

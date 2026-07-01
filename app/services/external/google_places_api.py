@@ -145,16 +145,25 @@ class GooglePlacesNewClient:
         return bool(self.api_key)
 
     def _search_one_query(self, query: str, lang: str) -> list[dict]:
-        """Execute une requete avec pagination (max 3 pages = 60 resultats)."""
+        """Execute une requete avec pagination (max 3 pages = 60 resultats).
+
+        PIEGE FACTURATION (spec) :
+          _NEW_FIELDS est le seul field mask autorise.
+          rating + userRatingCount = Enterprise tier (OK).
+          Ne JAMAIS ajouter reviews ou editorialSummary (Atmosphere = +cher).
+
+        PIEGE PAGINATION (spec) :
+          Tous les params doivent etre IDENTIQUES entre les pages.
+          On reconstruit le body complet avec pageToken plutot que de l'injecter.
+          sleep(3) obligatoire — token non valide immediatement.
+        """
         results, token = [], None
         for _attempt in range(3):
-            body: dict = {
-                "textQuery": query,
-                "languageCode": lang,
-                "pageSize": 20,
-            }
+            # Reconstruction complete du body (spec : tous params identiques entre pages)
+            body: dict = {"textQuery": query, "languageCode": lang, "pageSize": 20}
             if token:
-                body["pageToken"] = token
+                body = {"textQuery": query, "languageCode": lang, "pageSize": 20,
+                        "pageToken": token}
 
             try:
                 r = httpx.post(

@@ -13,11 +13,14 @@ Sprint 9 — Chemin B HTML generatif (USE_HTML_SLIDE_AGENT=true) :
   Cache Supabase (slide_cache.py) : 0 appel Gemini si section_data identique
   Le deterministique PPTX reste le fallback garanti pour chaque slide
 
+Sprint 10 v2 (Chantier D) :
+  _section_has_data() verifie que la section a assez de donnees avant d'appeler
+  Gemini (evite l'hallucination + rejet QA). La slide PPTX reste toujours produite.
+
 INVARIANT : le pipeline produit TOUJOURS 15 slides, meme si Gemini tombe.
   html_content=None -> renderer frontend utilise le PPTX deterministique.
 
 slide_builder_agent (Vertex AI / Sprint 2) n'est PLUS dans le chemin actif.
-Le fichier est conserve dans le repo mais ne doit pas etre appele ici.
 """
 import logging
 import os
@@ -85,6 +88,36 @@ _ALWAYS_INCLUDE = {"cover", "executive_summary", "swot", "verdict"}
 
 
 # -----------------------------------------------------------------------------
+# Chantier D — garde "donnees suffisantes" pour le chemin B HTML (Sprint 10)
+# -----------------------------------------------------------------------------
+# Si une section n'a pas assez de donnees, on ne genere pas de slide HTML
+# (l'agent hallucinerait ou produirait une slide vide). La slide PPTX deterministe
+# reste toujours produite — l'invariant "15 slides garanties" n'est pas touche.
+
+_SECTION_DATA_REQUIREMENTS: dict = {
+    "funding_feasibility": lambda m: m.get("funding_scale") is not None,
+    "benchmark_comparison": lambda m: len(m.get("benchmark_rows", [])) >= 3,
+    "demographics":         lambda m: m.get("demographics_pie") is not None,
+    "competition_mapping":  lambda m: len(m.get("competitors_top", [])) >= 1,
+}
+
+
+def _section_has_data(section_id: str, manifest: dict) -> bool:
+    """
+    Retourne True si la section dispose de donnees suffisantes pour une slide HTML.
+    False -> chemin B bypasse pour cette section, pas d'appel Gemini.
+    La slide PPTX deterministe est produite independamment de cette valeur.
+    """
+    check = _SECTION_DATA_REQUIREMENTS.get(section_id)
+    if check is None:
+        return True  # pas de contrainte connue -> on laisse l'agent essayer
+    try:
+        return bool(check(manifest))
+    except Exception:
+        return False
+
+
+# -----------------------------------------------------------------------------
 # Helpers
 # -----------------------------------------------------------------------------
 
@@ -133,6 +166,10 @@ def _prepare_section_data(study: Study, section_id: str, manifest: dict) -> dict
     Extrait du manifest uniquement les donnees pertinentes pour la section.
     Les noms externes (Places) sont sanitises avant d'entrer dans le prompt Gemini.
     Ne jamais passer le manifest complet au LLM (limite tokens + risque d'invention).
+
+    Sprint 10 : les valeurs derivees (benchmark_rows, demographics_pie, scores_radar,
+    competition_avg_rating) sont pre-calculees par slide_precompute.py et presentes
+    dans le manifest. L'agent les recopie, il ne calcule rien.
     """
     from app.agents.sanitize import sanitize_competitors_for_prompt
 
@@ -143,13 +180,14 @@ def _prepare_section_data(study: Study, section_id: str, manifest: dict) -> dict
         "language": study.language or "fr",
     }
 
-    if section_id == "competition":
+    if section_id == "competition" or section_id == "competition_mapping":
         return {
             **base,
             "competitors_top": sanitize_competitors_for_prompt(
                 manifest.get("competitors_top", [])
             ),
             "competitors_total_count": manifest.get("competitors_total_count", 0),
+            "competition_avg_rating": manifest.get("competition_avg_rating"),
         }
 
     if section_id == "executive_summary":
@@ -158,15 +196,14 @@ def _prepare_section_data(study: Study, section_id: str, manifest: dict) -> dict
             "market_sizing": manifest.get("market_sizing", {}),
             "funding_scale": manifest.get("funding_scale", {}),
             "verdict": manifest.get("verdict"),
+            "score_composite": manifest.get("score_composite"),
         }
 
     if section_id == "benchmark_comparison":
+        # benchmark_rows contient gap_display pre-calcule — l'agent recopie
         return {
             **base,
-            "metrics": [
-                m for m in (manifest.get("metrics", []) or [])
-                if m.get("national_benchmark") is not None
-            ][:10],
+            "benchmark_rows": manifest.get("benchmark_rows", []),
         }
 
     if section_id == "funding_feasibility":
@@ -176,9 +213,32 @@ def _prepare_section_data(study: Study, section_id: str, manifest: dict) -> dict
             "market_sizing": manifest.get("market_sizing", {}),
         }
 
+    if section_id == "demographics":
+        # demographics_pie contient le complement pre-calcule — l'agent recopie
+        return {
+            **base,
+            "demographics_pie": manifest.get("demographics_pie"),
+            "metrics": manifest.get("metrics", [])[:8],
+        }
+
+    if section_id == "verdict":
+        # scores_radar contient les valeurs arrondies pre-calculees
+        return {
+            **base,
+            "verdict": manifest.get("verdict"),
+            "scores_radar": manifest.get("scores_radar"),
+            "score_composite": manifest.get("score_composite"),
+        }
+
+    if section_id == "swot":
+        return {
+            **base,
+            "scores": manifest.get("scores", {}).get("items", []),
+        }
+
     return {
         **base,
-        "metrics": manifest.get("metrics", [])[:8],
+        "metrics": manifest.get("metrics", {}).get("items", manifest.get("metrics", []))[:8],
     }
 
 
@@ -199,6 +259,7 @@ def _generate_one_html(
 
     Integre :
     - Circuit breaker : si is_open -> bypass immediat (economie timeout)
+    - Chantier D : verif donnees suffisantes avant appel Gemini
     - Cache Supabase : si section_data identique -> 0 appel Gemini
     - QA deterministique : si nombres non traces -> None (pas de HTML invente)
     """
@@ -206,12 +267,21 @@ def _generate_one_html(
         logger.info("[slides_builder] breaker ouvert -> fallback %s", section["section_id"])
         return None
 
+    # Chantier D : verifier que la section dispose de donnees suffisantes
+    # AVANT d'appeler Gemini (evite l'hallucination + le rejet QA qui suivrait)
+    section_id = section["section_id"]
+    if not _section_has_data(section_id, manifest):
+        logger.info(
+            "[slides_builder] donnees insuffisantes -> pas de HTML pour %s",
+            section_id,
+        )
+        return None
+
     try:
         from app.agents.html_slide_agent import html_slide_agent
         from app.agents.qa_html_agent import validate_html
         from app.services.slide_cache import cache_get, cache_set, slide_cache_key
 
-        section_id = section["section_id"]
         brand = study.tenant_id or "interdomicilio"
         language = (study.language or "fr")[:2]
 
@@ -282,6 +352,7 @@ def build_slides_5_0_for_study(study: Study) -> Dict[str, Any]:
     skipped: List[str] = []
 
     # Manifest — source de verite pour l'agent et le QA
+    # Sprint 10 : manifest enrichi par precompute_slide_values() (benchmark_rows, etc.)
     manifest = master_json_builder.build(study)
 
     # Import optionnel de NarrativeAgent (silencieux si indispo)

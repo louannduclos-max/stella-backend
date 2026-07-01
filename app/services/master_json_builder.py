@@ -2,6 +2,7 @@ from datetime import UTC, datetime
 
 from app.api.schemas.common import Study
 from app.services.lovable_config import build_lovable_config
+from app.services.slide_precompute import precompute_slide_values
 
 
 class MasterJsonBuilder:
@@ -28,7 +29,7 @@ class MasterJsonBuilder:
         # Market sizing (Chantier 3) — stocké en attribut temporaire par le pipeline
         market_sizing = getattr(study, "_market_sizing", None)
 
-        return {
+        manifest = {
             "export_name": "stella_master_json",
             "generated_at": datetime.now(UTC).isoformat(),
             "study": {
@@ -86,6 +87,13 @@ class MasterJsonBuilder:
             # Marché adressable estimé (Chantier 3) — None si données insuffisantes
             "market_sizing": market_sizing,
         }
+
+        # Sprint 10 — Pré-calcul des valeurs dérivées pour les slides HTML
+        # L'agent LLM recopie ces valeurs, il ne calcule jamais.
+        # benchmark_rows (gap_display), demographics_pie, scores_radar, competition_avg_rating
+        manifest = precompute_slide_values(study, manifest)
+
+        return manifest
 
 
     def _compute_composite(self, study) -> float | None:
