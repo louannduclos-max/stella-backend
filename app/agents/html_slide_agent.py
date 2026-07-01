@@ -63,9 +63,11 @@ SECTION_DATA_KEYS: dict[str, list[str]] = {
     # competition_table est pré-calculé dans slide_precompute._compute_competition_table
     # competitors_top gardé en fallback si competition_table absent (vieilles études)
     "competition":          ["competition_table", "competitors_top",
-                             "competitors_total_count", "competition_avg_rating"],
+                             "competitors_total_count", "competition_avg_rating",
+                             "narratives"],
     "competition_mapping":  ["competition_table", "competitors_top",
-                             "competitors_total_count", "competition_avg_rating"],
+                             "competitors_total_count", "competition_avg_rating",
+                             "narratives"],
     "verdict":              ["verdict", "scores_radar", "score_composite", "narratives"],
     "swot":                 ["scores"],
     # Fix Sprint 13 : manifest n'a AUCUNE clé "action_plan" — la slide recevait
@@ -78,7 +80,7 @@ SECTION_DATA_KEYS: dict[str, list[str]] = {
     "income_housing":       ["metrics"],
     "methodology_sources":  ["sources"],
     # Sprint 13d — deck complet 15/15 (dernières sections registry)
-    "market_scorecard":     ["scores", "score_composite", "verdict"],
+    "market_scorecard":     ["scores", "score_composite", "verdict", "narratives"],
     "target_segments":      ["metrics", "market_sizing"],
     "real_estate":          ["metrics"],
     "microzones":           ["microzones", "metrics"],
@@ -87,7 +89,8 @@ SECTION_DATA_KEYS: dict[str, list[str]] = {
     # "study" EXCLU de geo_analysis : contient created_at/updated_at (datetime) non-sérialisables
     # par json.dumps dans _build_prompt → TypeError → crash worker → "Failed to fetch"
     "geo_analysis":         ["metrics", "microzones"],
-    "market_overview":      ["metrics", "market_sizing", "competitors_total_count"],
+    "market_overview":      ["metrics", "market_sizing", "competitors_total_count",
+                             "narratives"],
 }
 
 # maxOutputTokens calibre par section — evite la troncature HTML
@@ -186,6 +189,12 @@ Règles ABSOLUES :
 8. HTML CONCIS : privilégie les classes CSS existantes aux longs styles inline.
    Ne répète pas un même bloc de styles — factorise via les classes. Le HTML
    complet doit tenir dans le budget sans être coupé.
+9. NARRATION : chaque strategic-box contient 3 à 4 phrases d'analyse de niveau
+   consultant, structurées ainsi : constat chiffré (valeurs affichées sur la
+   slide) → implication métier concrète → recommandation actionnable. Jamais
+   une phrase générique unique. Si le JSON fournit un texte `narratives.*`
+   pertinent, l'utiliser comme base et le compléter — sans introduire de
+   nouveau chiffre.
 """
 
 def _build_prompt(

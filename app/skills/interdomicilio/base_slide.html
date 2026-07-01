@@ -220,6 +220,12 @@
       min-height: 720px;
       overflow: hidden;
       color: #1F2937;
+      /* Sprint 13f — netteté typographique (rendu jugé médiocre) */
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      text-rendering: optimizeLegibility;
+      font-size: 14px;
+      line-height: 1.5;
     }
 
     /* ── Variables marque ────────────────────────────────────────────── */
@@ -310,36 +316,44 @@
       flex: 1;
       background: var(--card-bg);
       border: 1px solid var(--card-border);
-      border-radius: 8px;
-      padding: 12px 16px;
+      border-radius: 10px;
+      padding: 14px 18px;
       display: flex;
       align-items: center;
-      gap: 10px;
+      gap: 12px;
+      /* Sprint 13f — profondeur */
+      box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08), 0 1px 2px rgba(15, 23, 42, 0.06);
     }
     .kpi-card .kpi-icon {
-      font-size: 22px;
+      font-size: 24px;
       color: var(--primary);
-      width: 28px;
+      width: 30px;
       text-align: center;
     }
     .kpi-card .kpi-value {
       font-family: 'Montserrat', sans-serif;
-      font-size: 22px;
+      font-size: 24px;
       font-weight: 800;
       color: var(--primary-dark);
-      line-height: 1;
+      line-height: 1.05;
     }
     .kpi-card .kpi-label {
-      font-size: 11px;
+      font-size: 11.5px;
+      font-weight: 600;
       color: var(--text-muted);
-      margin-top: 2px;
+      margin-top: 3px;
+      letter-spacing: 0.2px;
     }
 
     /* ── Table concurrence ───────────────────────────────────────────── */
     .comp-table {
       width: 100%;
       border-collapse: collapse;
-      font-size: 13px;
+      font-size: 13.5px;
+      /* Sprint 13f — profondeur (via wrapper impossible : ombre directe) */
+      box-shadow: 0 2px 10px rgba(15, 23, 42, 0.08);
+      border-radius: 8px;
+      overflow: hidden;
     }
     .comp-table thead tr {
       background: var(--primary);
@@ -389,12 +403,14 @@
     .strategic-box {
       background: var(--highlight-bg);
       border-left: 4px solid var(--primary);
-      border-radius: 0 8px 8px 0;
-      padding: 12px 18px;
+      border-radius: 0 10px 10px 0;
+      padding: 14px 20px;
       margin-top: 14px;
-      font-size: 12.5px;
+      font-size: 13.5px;
       color: var(--text);
-      line-height: 1.55;
+      line-height: 1.6;
+      /* Sprint 13f — profondeur */
+      box-shadow: 0 2px 8px rgba(15, 23, 42, 0.07);
     }
     .strategic-box .strat-icon {
       color: var(--primary);

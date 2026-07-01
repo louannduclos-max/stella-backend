@@ -40,8 +40,9 @@ Vue synthétique des 7 dimensions d'analyse — la slide "tableau de bord".
      au-delà du classement
 
 3. **Strategic box** (pleine largeur, bas) :
-   - 2 phrases de lecture globale citant le score composite et la dimension
-     critique. Aucun chiffre hors des scores affichés.
+   - Base du texte : `narratives.verdict_narrative` (fourni) — recopier puis
+     prolonger d'une phrase citant le score composite et la dimension critique.
+     3-4 phrases au total. Aucun chiffre hors des scores affichés.
    - Icône `fa-gauge-high`
 
 ## Règles

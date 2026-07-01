@@ -38,9 +38,10 @@ Colonnes : **Nom** | **Domaine d'expertise** | **Note** | **Statut**
 
 ### 3. Strategic box
 
-- Citer `count_direct` et `count_total` (réels, jamais inventés)
-- Citer `avg_rating` si non null
-- Analyser la pression concurrentielle (directs vs. indirects) et le niveau qualitatif
+- Base du texte : `narratives.competitive_insight` (fourni dans les données) —
+  le recopier puis le prolonger d'1-2 phrases citant `count_direct`,
+  `count_total` et `avg_rating` (réels, jamais inventés)
+- 3-4 phrases au total : constat chiffré → implication → recommandation
 - Icône `fa-map-location-dot`
 
 ## Cas edge

@@ -32,8 +32,9 @@
    - PLEINE LARGEUR obligatoire : `display:block; width:100%` — ne JAMAIS placer
      cet encart dans une colonne flex étroite (bug constaté : texte rendu
      verticalement, un mot par ligne)
-   - 3 phrases sur la taille et la structure du marché, en citant UNIQUEMENT
-     des valeurs affichées dans les cards ci-dessus
+   - Base du texte : `narratives.opportunity_text` (fourni) — recopier puis
+     prolonger. 3-4 phrases sur la taille et la structure du marché, en citant
+     UNIQUEMENT des valeurs affichées dans les cards ci-dessus
    - Icône `fa-globe`, couleur primaire
 
 3. **Ligne hypothèses** (si `market_sizing` affiché) : recopier le `disclaimer`
