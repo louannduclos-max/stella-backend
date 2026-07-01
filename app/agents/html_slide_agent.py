@@ -84,6 +84,8 @@ SECTION_MAX_TOKENS: dict[str, int] = {
     "demographics":         4096,
     "verdict":              4096,
     "swot":                 3500,
+    "geo_analysis":         4096,
+    "market_overview":      4096,
 }
 _DEFAULT_MAX_TOKENS = 3000
 
