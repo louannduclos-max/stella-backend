@@ -20,6 +20,10 @@ class StudyCreateRequest(BaseModel):
     company_id: str | None = None             # UUID Supabase companies.id
     external_study_id: str | None = None      # UUID Supabase studies.id → utilisé comme study_id backend
     brand_profile_override: dict | None = None  # inline depuis company_branding Supabase
+    # Sprint 14b — sélections wizard CLASSÉES par le front (kpi_master & co) :
+    # {kpis, kpis_enriched, analysis_axes, target_publics, commune_types,
+    #  zone_focus, risks, road_axes, demographic_segments, palette_key, ...}
+    wizard_selections: dict | None = None
 
 
 class StudyCreateResponse(BaseModel):

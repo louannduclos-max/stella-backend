@@ -99,17 +99,7 @@ class MasterJsonBuilder:
             # du client et le brand profile son cadre. Ces variables existaient
             # (BusinessContext) mais n'atteignaient jamais les slides.
             # Transmis à TOUTES les sections via _filter_section_data.
-            "intent": {
-                "study_type": study.study_type,
-                "study_goal": study.business_context.study_goal,
-                "business_model": study.business_context.business_model,
-                "service_scope": study.business_context.service_scope,
-                "positioning_mode": study.business_context.positioning_mode,
-                "target_customer_segments": study.business_context.target_customer_segments,
-                "pricing_positioning": study.business_context.pricing_positioning,
-                "brand_context": (study.brand_profile_override or {}).get("brand_context")
-                                 or (study.brand_profile_override or {}).get("description"),
-            },
+            "intent": self._build_intent(study),
             # ─── Data-Depth sprint ────────────────────────────────────────────
             # Concurrents nommés Google Places (Chantier 2)
             "competitors_top": competitors_top,          # jusqu'à 10 acteurs nommés
@@ -135,6 +125,42 @@ class MasterJsonBuilder:
 
         return manifest
 
+
+    def _build_intent(self, study) -> dict:
+        """
+        Sprint 14a/14b — la couche INTENTION : wizard (prompt structuré du
+        client) + brand profile (cadre). Transmise à toutes les slides et au
+        deck_composer. AUCUNE donnée de marché ici — uniquement l'angle.
+        """
+        ws = study.wizard_selections or {}
+        bpo = study.brand_profile_override or {}
+
+        # KPI choisis par le client, avec labels si le front les a enrichis
+        kpis_enriched = ws.get("kpis_enriched") or []
+        kpi_labels = [
+            k.get("label") for k in kpis_enriched
+            if isinstance(k, dict) and k.get("label")
+        ]
+
+        from app.services.deck_composer import kpi_focus_from_wizard
+        return {
+            "study_type": study.study_type,
+            "study_goal": study.business_context.study_goal,
+            "business_model": study.business_context.business_model,
+            "service_scope": study.business_context.service_scope,
+            "positioning_mode": study.business_context.positioning_mode,
+            "target_customer_segments": study.business_context.target_customer_segments,
+            "pricing_positioning": study.business_context.pricing_positioning,
+            "brand_context": bpo.get("brand_context") or bpo.get("description"),
+            # Sprint 14b — sélections wizard classées par le front
+            "kpi_focus": kpi_focus_from_wizard(ws),          # thèmes backend (ou None)
+            "analysis_axes": ws.get("analysis_axes"),
+            "kpi_selected_labels": kpi_labels[:20],
+            "target_publics": ws.get("target_publics"),
+            "zone_focus": ws.get("zone_focus"),
+            "risks": ws.get("risks"),
+            "commune_types": ws.get("commune_types"),
+        }
 
     def _compute_composite(self, study) -> float | None:
         """Calcule le score composite pondéré depuis les scores de l'étude."""

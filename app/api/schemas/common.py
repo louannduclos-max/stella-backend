@@ -198,5 +198,9 @@ class Study(BaseModel):
     # l'ancien attribut dynamique `_market_sizing` levait ValueError sur Pydantic v2
     # (avalé par try/except) → market_sizing toujours null dans le manifest.
     market_sizing: dict | None = None
+    # Sprint 14b — le "prompt structuré" du client : sélections wizard classées
+    # par le front (KPI par catégorie, axes d'analyse, publics cibles, risques…).
+    # Alimente intent + deck_composer. None = étude legacy → deck complet.
+    wizard_selections: dict | None = None
     created_at: datetime
     updated_at: datetime

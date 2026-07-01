@@ -112,6 +112,26 @@ def post_generate_study(payload: dict, request: Request) -> dict:
         "tenant_id": study_data.get("tenant_id"),
         "company_id": study_data.get("company_id"),
         "brand_profile_override": study_data.get("brand_profile_override"),
+        # Sprint 14b — le front classe déjà les choix client (kpi_master & co) :
+        # on les transmet ENFIN au lieu de les jeter. Alimente intent + composer.
+        "wizard_selections": {
+            "kpis": study_data.get("kpis"),
+            "kpis_enriched": study_data.get("kpis_enriched"),
+            "kpi_selected": study_data.get("kpi_selected"),
+            "analysis_axes": study_data.get("analysis_axes"),
+            "target_publics": study_data.get("target_publics"),
+            "commune_types": study_data.get("commune_types"),
+            "zone_focus": study_data.get("zone_focus"),
+            "risks": study_data.get("risks"),
+            "road_axes": study_data.get("road_axes"),
+            "demographic_segments": study_data.get("demographic_segments"),
+            "reference_years": study_data.get("reference_years"),
+            "palette_key": study_data.get("palette_key"),
+            "deliverable_format": study_data.get("deliverable_format"),
+            "study_family_code": study_data.get("study_family_code"),
+            "study_category_code": study_data.get("study_category_code"),
+            "study_subtype_code": study_data.get("study_subtype_code"),
+        },
     }
 
     # 4. Vérifier que l'étude n'existe pas déjà (idempotence)

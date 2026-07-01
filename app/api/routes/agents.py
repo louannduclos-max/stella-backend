@@ -550,11 +550,48 @@ def debug_manifest(study_id: str) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# 7ter. Debug — Plan de deck (Sprint 14b — composeur par catégories de KPI)
+# ---------------------------------------------------------------------------
+
+@router.get("/debug/deck-plan")
+def debug_deck_plan(study_id: str, focus: str | None = None) -> dict:
+    """
+    Montre la COMPOSITION du deck décidée par le deck_composer (déterministe) :
+    quelles slides, dans quel ordre, pourquoi (focus client + données réelles).
+
+    Usage :
+      GET /agents/debug/deck-plan?study_id=...
+      GET /agents/debug/deck-plan?study_id=...&focus=competition,employment
+    """
+    from app.repositories.studies_repo import studies_repo
+    from app.services.deck_composer import KNOWN_THEMES, compose_deck
+    from app.services.master_json_builder import master_json_builder
+
+    study = studies_repo.get(study_id)
+    if not study:
+        raise HTTPException(404, f"Study '{study_id}' not found")
+
+    manifest = master_json_builder.build(study)
+    # Priorité : ?focus= explicite > choix wizard du client (intent) > deck complet
+    kpi_focus = ([f for f in (focus or "").split(",") if f.strip()]
+                 or (manifest.get("intent") or {}).get("kpi_focus"))
+    deck = compose_deck(manifest, kpi_focus)
+
+    return {
+        "study_id": study_id,
+        "kpi_focus": kpi_focus,
+        "known_themes": KNOWN_THEMES,
+        "deck_size": sum(1 for d in deck if d["status"] in ("core", "included")),
+        "deck": deck,
+    }
+
+
+# ---------------------------------------------------------------------------
 # 7bis. Debug — Galerie visuelle (Sprint 13)
 # ---------------------------------------------------------------------------
 
 @router.get("/debug/slides-gallery")
-def debug_slides_gallery(study_id: str) -> object:
+def debug_slides_gallery(study_id: str, focus: str | None = None) -> object:
     """
     Page HTML unique affichant TOUTES les sections d'une étude en iframes.
 
@@ -576,16 +613,16 @@ def debug_slides_gallery(study_id: str) -> object:
     if not study:
         raise HTTPException(404, f"Study '{study_id}' not found")
 
-    sections = [
-        # Sprint 13d — deck complet : les 15 sections du registry (ordre deck)
-        "cover", "executive_summary", "market_scorecard", "demographics",
-        "target_segments", "employment_talent", "income_housing", "real_estate",
-        "microzones", "competition_mapping", "regulation_feasibility",
-        "swot", "verdict", "action_plan", "methodology_sources",
-        # + sections d'enrichissement (hors registry)
-        "market_overview", "geo_analysis", "benchmark_comparison",
-        "funding_feasibility",
-    ]
+    # Sprint 14b — la galerie suit le deck_composer : composition par
+    # catégories de KPI (?focus=competition,employment) + données réelles.
+    # Sans focus : toutes les sections ayant des données.
+    from app.services.deck_composer import active_sections
+    from app.services.master_json_builder import master_json_builder as _mjb
+    _manifest = _mjb.build(study)
+    # Priorité : ?focus= explicite > choix wizard du client (intent) > deck complet
+    _kpi_focus = ([f for f in (focus or "").split(",") if f.strip()]
+                  or (_manifest.get("intent") or {}).get("kpi_focus"))
+    sections = active_sections(_manifest, _kpi_focus)
     city = study.geo_scope.city or ""
 
     cards = "\n".join(

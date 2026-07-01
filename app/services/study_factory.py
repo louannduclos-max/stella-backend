@@ -30,6 +30,7 @@ class StudyFactory:
             tenant_id=tenant_id,
             company_id=payload.company_id,
             brand_profile_override=payload.brand_profile_override,
+            wizard_selections=payload.wizard_selections,
             geo_scope=geo_normalizer.normalize(
                 city=payload.city,
                 country=payload.country,
