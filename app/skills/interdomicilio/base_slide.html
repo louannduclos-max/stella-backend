@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="{LANGUAGE}">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=1280" />
+  <title>{SECTION_TITLE} — {BRAND_NAME}</title>
+
+  <!-- Fonts & icons -->
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800&family=Open+Sans:wght@400;600;700&display=swap" rel="stylesheet" />
+  <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet" />
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet" />
+
+  <style>
+    /* ── Reset & base ───────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Open Sans', sans-serif;
+      background: #ffffff;
+      width: 1280px;
+      min-height: 720px;
+      overflow: hidden;
+      color: #1F2937;
+    }
+
+    /* ── Variables marque ────────────────────────────────────────────── */
+    :root {
+      --primary:      #0095D9;
+      --primary-dark: #00608A;
+      --accent:       #FFCC00;
+      --text:         #1F2937;
+      --text-muted:   #6B7280;
+      --card-bg:      #E6F4FB;
+      --card-border:  #0095D9;
+      --highlight-bg: #F0F9FF;
+      --success:      #16A34A;
+      --warn:         #EA580C;
+    }
+
+    /* ── Header ─────────────────────────────────────────────────────── */
+    .slide-header {
+      background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+      padding: 16px 32px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 80px;
+    }
+    .slide-header .section-num {
+      font-family: 'Montserrat', sans-serif;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: rgba(255,255,255,0.7);
+    }
+    .slide-header .section-title {
+      font-family: 'Montserrat', sans-serif;
+      font-size: 20px;
+      font-weight: 800;
+      color: #ffffff;
+      letter-spacing: 0.3px;
+    }
+    .slide-header .section-subtitle {
+      font-size: 12px;
+      color: rgba(255,255,255,0.85);
+      margin-top: 2px;
+    }
+    .slide-header .brand-badge {
+      font-family: 'Montserrat', sans-serif;
+      font-size: 13px;
+      font-weight: 700;
+      color: rgba(255,255,255,0.9);
+      background: rgba(255,255,255,0.15);
+      border-radius: 4px;
+      padding: 4px 10px;
+    }
+
+    /* ── Footer ─────────────────────────────────────────────────────── */
+    .slide-footer {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 36px;
+      background: #F3F4F6;
+      border-top: 2px solid var(--primary);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 32px;
+      font-size: 10px;
+      color: var(--text-muted);
+    }
+    .slide-footer .footer-brand { font-weight: 700; color: var(--primary); }
+    .slide-footer .footer-page { font-weight: 600; }
+
+    /* ── Main content zone ───────────────────────────────────────────── */
+    .slide-body {
+      padding: 20px 32px 52px;
+      position: relative;
+    }
+
+    /* ── KPI cards (ligne de métriques) ─────────────────────────────── */
+    .kpi-row {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    .kpi-card {
+      flex: 1;
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
+      padding: 12px 16px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .kpi-card .kpi-icon {
+      font-size: 22px;
+      color: var(--primary);
+      width: 28px;
+      text-align: center;
+    }
+    .kpi-card .kpi-value {
+      font-family: 'Montserrat', sans-serif;
+      font-size: 22px;
+      font-weight: 800;
+      color: var(--primary-dark);
+      line-height: 1;
+    }
+    .kpi-card .kpi-label {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+
+    /* ── Table concurrence ───────────────────────────────────────────── */
+    .comp-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+    .comp-table thead tr {
+      background: var(--primary);
+      color: #ffffff;
+    }
+    .comp-table thead th {
+      padding: 10px 14px;
+      font-family: 'Montserrat', sans-serif;
+      font-weight: 700;
+      font-size: 12px;
+      letter-spacing: 0.3px;
+      text-align: left;
+    }
+    .comp-table tbody tr:nth-child(even) { background: var(--highlight-bg); }
+    .comp-table tbody tr:nth-child(odd)  { background: #ffffff; }
+    .comp-table tbody tr.is-direct {
+      background: #FFF8E1;
+      border-left: 3px solid var(--accent);
+    }
+    .comp-table tbody td {
+      padding: 9px 14px;
+      border-bottom: 1px solid #E5E7EB;
+      vertical-align: middle;
+    }
+    .comp-table .rating-stars { color: #F59E0B; font-size: 12px; }
+    .comp-table .badge-direct {
+      display: inline-block;
+      background: var(--accent);
+      color: #92400E;
+      font-size: 10px;
+      font-weight: 700;
+      border-radius: 3px;
+      padding: 1px 6px;
+      text-transform: uppercase;
+    }
+    .comp-table .badge-indirect {
+      display: inline-block;
+      background: #E5E7EB;
+      color: var(--text-muted);
+      font-size: 10px;
+      font-weight: 600;
+      border-radius: 3px;
+      padding: 1px 6px;
+    }
+
+    /* ── Strategic box ───────────────────────────────────────────────── */
+    .strategic-box {
+      background: var(--highlight-bg);
+      border-left: 4px solid var(--primary);
+      border-radius: 0 8px 8px 0;
+      padding: 12px 18px;
+      margin-top: 14px;
+      font-size: 12.5px;
+      color: var(--text);
+      line-height: 1.55;
+    }
+    .strategic-box .strat-icon {
+      color: var(--primary);
+      margin-right: 6px;
+    }
+
+    /* ── Accent bar sous titre de section ───────────────────────────── */
+    .section-accent-bar {
+      height: 3px;
+      width: 40px;
+      background: var(--accent);
+      border-radius: 2px;
+      margin-bottom: 14px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- HEADER -->
+  <header class="slide-header">
+    <div>
+      <div class="section-num">Section {SECTION_NUMBER} / {TOTAL_SECTIONS} — {STUDY_TYPE}</div>
+      <div class="section-title">{SECTION_TITLE}</div>
+      <div class="section-subtitle">{SECTION_SUBTITLE}</div>
+    </div>
+    <div class="brand-badge">{BRAND_NAME} · {ZONE} · {YEAR}</div>
+  </header>
+
+  <!-- MAIN CONTENT (généré par HTMLSlideAgent) -->
+  <main class="slide-body">
+    {MAIN_CONTENT}
+  </main>
+
+  <!-- FOOTER -->
+  <footer class="slide-footer">
+    <span><span class="footer-brand">{BRAND_NAME}</span> — Étude Stella</span>
+    <span>{ZONE} · {YEAR}</span>
+    <span class="footer-page">{SECTION_NUMBER} / {TOTAL_SECTIONS}</span>
+  </footer>
+
+</body>
+</html>

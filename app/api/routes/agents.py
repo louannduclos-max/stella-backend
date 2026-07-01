@@ -363,6 +363,105 @@ def debug_places_probe(
     }
 
 
+# ---------------------------------------------------------------------------
+# 7. Debug — HTML Slide (Sprint 8 — Chemin B test décisif)
+# ---------------------------------------------------------------------------
+
+@router.get("/debug/html-slide")
+def debug_html_slide(
+    study_id: str,
+    section_id: str = "competition",
+) -> object:
+    """
+    Génère UNE slide en HTML pour test visuel.
+
+    Retourne le HTML brut (à ouvrir dans un navigateur) si le QA passe.
+    Si le QA échoue : retourne un JSON avec les nombres non tracés.
+
+    Usage :
+      GET /agents/debug/html-slide?study_id=18f460c9-245b-4443-aa65-23eb2032089c
+      GET /agents/debug/html-slide?study_id=...&section_id=competition
+
+    Exige :
+      - GEMINI_API_KEY configuré sur Render
+      - L'étude doit avoir des competitors_top dans son manifest
+    """
+    from fastapi.responses import Response as FastAPIResponse
+
+    from app.repositories.studies_repo import studies_repo
+    from app.agents.html_slide_agent import html_slide_agent
+    from app.agents.qa_html_agent import validate_html
+    from app.services.master_json_builder import master_json_builder
+
+    study = studies_repo.get(study_id)
+    if not study:
+        raise HTTPException(404, f"Study '{study_id}' not found")
+
+    manifest = master_json_builder.build(study)
+
+    # Données passées au LLM : uniquement ce dont la slide a besoin
+    # (pas tout le manifest, pour limiter tokens et risque d'invention)
+    section_data: dict = {}
+    if section_id == "competition":
+        section_data = {
+            "competitors_top": manifest.get("competitors_top", []),
+            "competitors_total_count": manifest.get("competitors_total_count", 0),
+            "zone": study.geo_scope.city or "",
+            "brand_name": study.business_context.brand_name or "",
+        }
+
+    logger.info(
+        "[debug/html-slide] study=%s section=%s competitors=%d",
+        study_id, section_id,
+        len(section_data.get("competitors_top", [])),
+    )
+
+    main_content = html_slide_agent.generate_main_content(
+        section_id=section_id,
+        section_number=11,
+        section_data=section_data,
+        brand=study.tenant_id or "interdomicilio",
+        language="fr",
+    )
+
+    if not main_content:
+        return {
+            "error": "génération HTML échouée (Gemini indisponible ou skill manquant)",
+            "html": None,
+            "study_id": study_id,
+        }
+
+    qa_ok, untraceable = validate_html(main_content, manifest)
+
+    full_html = html_slide_agent.assemble_slide(
+        section_id=section_id,
+        section_number=11,
+        section_title="Cartographie concurrentielle",
+        section_subtitle=f"Marché {study.geo_scope.city or ''}",
+        main_content=main_content,
+        brand=study.tenant_id or "interdomicilio",
+        language="fr",
+        study_type="Étude de faisabilité",
+        zone=study.geo_scope.city or "",
+        year="2026",
+    )
+
+    if qa_ok:
+        logger.info("[debug/html-slide] QA OK — slide HTML retournée")
+        return FastAPIResponse(content=full_html, media_type="text/html")
+    else:
+        logger.warning(
+            "[debug/html-slide] QA FAIL — %d nombres non tracés : %s",
+            len(untraceable), untraceable[:5],
+        )
+        return {
+            "qa_failed": True,
+            "untraceable_count": len(untraceable),
+            "untraceable_numbers": untraceable[:20],
+            "html": full_html,
+        }
+
+
 @router.post("/visual-qa/report", response_model=AgentResponse)
 def submit_visual_qa_report(report: VisualQAReport) -> AgentResponse:
     """

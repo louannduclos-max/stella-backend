@@ -8,6 +8,7 @@ régressions grossières automatiquement :
   - SWOT sans bullets
   - nombre mal formaté (collé à son unité sans espace)
   - objet hors canvas
+  - champs Data-Depth manquants (benchmark, concurrents, barème APA)
 
 Usage :
   python tests/golden_check.py           # run check
@@ -86,6 +87,43 @@ def _check_canvas_bounds(slides: list) -> list[str]:
     return failures
 
 
+def _check_data_depth(study) -> list[str]:
+    """
+    Vérifie que les champs Data-Depth Sprint sont présents et cohérents.
+    Ces checks s'assurent que le pipeline d'enrichissement a bien tourné.
+    """
+    failures = []
+
+    # 1 — Au moins une métrique avec benchmark national
+    metrics_with_benchmark = [
+        m for m in (study.metrics or [])
+        if m.national_benchmark is not None
+    ]
+    if not metrics_with_benchmark:
+        failures.append(
+            "DATA_DEPTH: aucune métrique avec national_benchmark "
+            "— vérifier benchmark_engine.enrich_metrics() dans run_study.py"
+        )
+
+    # 2 — Liste concurrentielle non vide
+    # (peut être vide si Places n'a rien renvoyé — warning non bloquant)
+    if not (study.competitors or []):
+        failures.append(
+            "DATA_DEPTH (warning): study.competitors vide "
+            "— Google Places n'a peut-être rien renvoyé ou build_competitors_from_places() non appelé"
+        )
+
+    # 3 — Barème financement présent pour une étude FR
+    country = (study.country or "FR").upper()
+    if country == "FR" and study.funding_scale is None:
+        failures.append(
+            "DATA_DEPTH: funding_scale absent pour une étude FR "
+            "— vérifier get_funding_scale() dans run_study.py Phase 3"
+        )
+
+    return failures
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Runner
 # ─────────────────────────────────────────────────────────────────────────────
@@ -109,10 +147,13 @@ def run_golden_check() -> bool:
     slides = payload.get("slides", [])
 
     failures: list[str] = []
+    # Checks slides (rendu PPTX)
     failures += _check_no_empty_slides(slides)
     failures += _check_swot_bullets(slides)
     failures += _check_number_formatting(slides)
     failures += _check_canvas_bounds(slides)
+    # Checks manifest Data-Depth (Sprint 7)
+    failures += _check_data_depth(study)
 
     if failures:
         print(f"❌ GOLDEN CHECK ÉCHOUÉ — {len(failures)} problème(s) :")

@@ -1,0 +1,27 @@
+{
+  "brand": "interdomicilio",
+  "brand_name": "Interdomicilio",
+  "canvas": { "width": 1280, "height": 720 },
+  "colors": {
+    "primary":        "#0095D9",
+    "primary_dark":   "#00608A",
+    "accent":         "#FFCC00",
+    "text":           "#1F2937",
+    "text_muted":     "#6B7280",
+    "card_bg":        "#E6F4FB",
+    "card_border":    "#0095D9",
+    "highlight_bg":   "#F0F9FF",
+    "success":        "#16A34A",
+    "warn":           "#EA580C"
+  },
+  "fonts": {
+    "title": "Montserrat",
+    "body":  "Open Sans"
+  },
+  "cdn": {
+    "tailwind":    "https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css",
+    "fontawesome": "https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css",
+    "chartjs":     "https://cdn.jsdelivr.net/npm/chart.js",
+    "fonts":       "https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800&family=Open+Sans:wght@400;600;700&display=swap"
+  }
+}

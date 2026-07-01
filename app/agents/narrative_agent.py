@@ -12,14 +12,17 @@ Fallback silencieux si la clé est absente ou si l'API échoue.
 import json
 import logging
 import os
+import re
 
 import httpx
 
 logger = logging.getLogger(__name__)
 
+# Modèle configurable via env var GEMINI_MODEL — partagé avec gemini_analyst
+GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
 _GEMINI_URL = (
     "https://generativelanguage.googleapis.com/v1beta/models/"
-    "gemini-2.5-flash:generateContent"
+    f"{GEMINI_MODEL}:generateContent"
 )
 
 NARRATIVE_SYSTEM_PROMPT = """
@@ -38,6 +41,31 @@ Règles absolues :
 Format de sortie strict :
 { "slot_id_1": "texte rempli", "slot_id_2": "texte rempli", ... }
 """
+
+
+def _safe_parse_json(raw: str) -> dict | None:
+    """
+    Parse JSON de façon défensive :
+    1. Retire les fences markdown (```json ... ```)
+    2. Tente json.loads normal
+    3. Si échec, tente jusqu'au dernier } valide (réponse tronquée)
+    4. Retourne None si tout échoue — jamais de crash
+    """
+    txt = raw.strip()
+    txt = re.sub(r"^```json\s*", "", txt)
+    txt = re.sub(r"^```\s*", "", txt)
+    txt = re.sub(r"\s*```$", "", txt)
+    txt = txt.strip()
+    try:
+        return json.loads(txt)
+    except json.JSONDecodeError:
+        last = txt.rfind("}")
+        if last > 0:
+            try:
+                return json.loads(txt[: last + 1])
+            except json.JSONDecodeError:
+                pass
+    return None
 
 
 class NarrativeAgent:
@@ -98,17 +126,21 @@ class NarrativeAgent:
                     "contents": [{"parts": [{"text": user_prompt}]}],
                     "generationConfig": {
                         "temperature": 0.1,
-                        "maxOutputTokens": 2000,
+                        "maxOutputTokens": 4096,
                     },
                 },
                 timeout=30,
             )
+            logger.warning("[NarrativeAgent] HTTP %s model=%s", r.status_code, GEMINI_MODEL)
             r.raise_for_status()
 
             raw = r.json()["candidates"][0]["content"]["parts"][0]["text"]
-            # Nettoyer éventuels blocs markdown
-            raw = raw.strip().lstrip("```json").lstrip("```").rstrip("```").strip()
-            filled: dict = json.loads(raw)
+            logger.warning("[NarrativeAgent] BODY (300 premiers car.) : %s", raw[:300])
+
+            filled = _safe_parse_json(raw)
+            if filled is None:
+                logger.warning("[NarrativeAgent] _safe_parse_json échoué — réponse brute : %s", raw[:200])
+                return slide_objects
 
             # Injecter dans les objets sans toucher aux positions
             for obj in slide_objects:

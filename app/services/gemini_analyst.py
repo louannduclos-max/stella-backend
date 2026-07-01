@@ -2,7 +2,7 @@
 Sprint 4 Lot C — Gemini Narrative Analyst.
 
 Génère des narratifs analytiques en langage naturel pour les études Stella.
-Utilise Google Gemini 1.5 Flash via l'API REST (httpx déjà présent dans requirements).
+Utilise Google Gemini via l'API REST (httpx déjà présent dans requirements).
 
 Comportement :
   - Si GEMINI_API_KEY est configurée : appel Gemini API, retourne JSON narratif
@@ -16,7 +16,7 @@ Clés produites (toujours présentes dans le dict retourné) :
   action_60d           — action prioritaire à 60 jours
   action_90d           — action prioritaire à 90 jours
   opportunity_text     — description de l'opportunité spécifique
-  generated_by         — "gemini-1.5-flash" | "template"
+  generated_by         — "gemini-2.5-flash" | "template"
 """
 
 from __future__ import annotations
@@ -24,6 +24,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 from typing import TYPE_CHECKING
 
 import httpx
@@ -33,12 +34,14 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-# Gemini 2.5 Flash — rapide, peu coûteux, JSON natif (2.0-flash déprécié juin 2026)
+# Modèle configurable via env var GEMINI_MODEL (défaut : gemini-2.5-flash)
+# Sur Render : GEMINI_MODEL=gemini-2.5-flash
+GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
 _GEMINI_URL = (
     "https://generativelanguage.googleapis.com/v1beta/models/"
-    "gemini-2.5-flash:generateContent"
+    f"{GEMINI_MODEL}:generateContent"
 )
-_GEMINI_TIMEOUT_S = 25
+_GEMINI_TIMEOUT_S = 30
 
 _VERDICT_LABELS_FR = {
     "go": "favorable",
@@ -56,6 +59,37 @@ _SERVICE_LABELS_FR = {
     "SAP_MEN": "ménage & repassage",
     "SAP_SEN": "aide aux seniors",
 }
+
+
+# ---------------------------------------------------------------------------
+# Parsing défensif (Sprint 8 — résiste aux fences markdown et JSON tronqué)
+# ---------------------------------------------------------------------------
+
+def _safe_parse_json(raw: str) -> dict | None:
+    """
+    Parse JSON de façon défensive :
+    1. Retire les fences markdown (```json ... ```)
+    2. Tente json.loads normal
+    3. Si échec, tente jusqu'au dernier } valide (réponse tronquée)
+    4. Retourne None si tout échoue — jamais de crash
+    """
+    txt = raw.strip()
+    # Retirer les fences markdown
+    txt = re.sub(r"^```json\s*", "", txt)
+    txt = re.sub(r"^```\s*", "", txt)
+    txt = re.sub(r"\s*```$", "", txt)
+    txt = txt.strip()
+    try:
+        return json.loads(txt)
+    except json.JSONDecodeError:
+        # Tenter de récupérer jusqu'au dernier } valide (JSON tronqué)
+        last = txt.rfind("}")
+        if last > 0:
+            try:
+                return json.loads(txt[: last + 1])
+            except json.JSONDecodeError:
+                pass
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -175,27 +209,36 @@ Génère UNIQUEMENT un objet JSON valide (sans backticks, sans commentaires) ave
 
 
 def _call_gemini(prompt: str, api_key: str) -> dict | None:
-    """Appel HTTP direct à l'API Gemini 1.5 Flash. Retourne le JSON parsé ou None."""
+    """Appel HTTP direct à l'API Gemini. Retourne le JSON parsé ou None."""
     url = f"{_GEMINI_URL}?key={api_key}"
     body = {
         "contents": [{"parts": [{"text": prompt}]}],
         "generationConfig": {
             "temperature": 0.3,
-            "maxOutputTokens": 1024,
+            "maxOutputTokens": 4096,
             "responseMimeType": "application/json",
         },
     }
     try:
         resp = httpx.post(url, json=body, timeout=_GEMINI_TIMEOUT_S)
+        logger.warning("[gemini_analyst] HTTP %s model=%s", resp.status_code, GEMINI_MODEL)
         resp.raise_for_status()
         candidates = resp.json().get("candidates", [])
         if not candidates:
             logger.warning("[gemini_analyst] aucun candidat dans la réponse Gemini")
             return None
         text = candidates[0]["content"]["parts"][0]["text"]
-        return json.loads(text)
+        logger.warning("[gemini_analyst] BODY (500 premiers car.) : %s", text[:500])
+        result = _safe_parse_json(text)
+        if result is None:
+            logger.warning("[gemini_analyst] _safe_parse_json échoué — réponse brute : %s", text[:300])
+        return result
     except httpx.HTTPStatusError as exc:
-        logger.warning("[gemini_analyst] HTTP %s : %s", exc.response.status_code, exc.response.text[:200])
+        logger.warning(
+            "[gemini_analyst] HTTP %s : %s",
+            exc.response.status_code,
+            exc.response.text[:300],
+        )
         return None
     except (json.JSONDecodeError, KeyError) as exc:
         logger.warning("[gemini_analyst] parsing réponse échoué : %s", exc)
@@ -245,7 +288,7 @@ def generate_narratives(study: "Study") -> dict:
             logger.warning("[gemini_analyst] clés manquantes %s — fallback template", missing)
             return _template_narratives(study)
 
-        result["generated_by"] = "gemini-2.5-flash"
+        result["generated_by"] = GEMINI_MODEL
         logger.info(
             "[gemini_analyst] narratifs Gemini générés pour study=%s city=%s",
             study.study_id, study.geo_scope.city,

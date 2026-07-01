@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 TEMPLATES_DIR = Path(__file__).parent.parent / "templates" / "slides"
 VERTEX_REGION = "europe-west1"
 VERTEX_PROJECT = os.environ.get("GCP_PROJECT_ID", "ouicare-stella-prod")
-VERTEX_MODEL = "gemini-2.0-flash"
+VERTEX_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
 
 # Mapping section → template
 SECTION_TEMPLATE_MAP = {
