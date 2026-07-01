@@ -203,8 +203,47 @@ def validate_html(html: str, manifest: dict) -> tuple[bool, list[str]]:
 
     issues: list[str] = []
     issues.extend(_check_html_structure(html))          # Sprint 10 : check tronque en premier
+    issues.extend(_check_template_leakage(html))        # Sprint 13 : Jinja/placeholder brut
+    issues.extend(_check_empty_main(html))              # Sprint 13 : slide quasi vide
     issues.extend(_check_visible_numbers(html, idx))
     issues.extend(_check_chartjs_data(html, idx))
     issues.extend(_check_red_flags(html))
 
     return (len(issues) == 0), issues
+
+
+# -----------------------------------------------------------------------------
+# Sprint 13 — checks de FORME (observés en prod le 01/07/2026)
+# -----------------------------------------------------------------------------
+
+_TEMPLATE_PATTERNS = re.compile(r"\{\{|\}\}|\{%|%\}")
+
+
+def _check_template_leakage(html: str) -> list[str]:
+    """
+    Detecte la syntaxe de template ({{ var }}, {% for %}) dans le HTML.
+
+    Cas reel observe (gallery Bordeaux 01/07) : Gemini a produit un template
+    Jinja complet ('{{ competition_table.count_total }}', '{% for comp in ... %}')
+    au lieu de recopier les valeurs. Le QA chiffres ne voyait rien (peu de
+    digits) → la slide etait servie avec du code brut visible.
+    """
+    # IMPORTANT : sur le texte VISIBLE uniquement — les configs Chart.js
+    # legitimes contiennent des '}}' (fermetures d'objets JS imbriques).
+    matches = _TEMPLATE_PATTERNS.findall(_visible_text(html))
+    if matches:
+        return [f"template:syntaxe {{{{...}}}} ou {{%...%}} detectee ({len(matches)} occurrences) — l'agent a genere un template au lieu de recopier les valeurs"]
+    return []
+
+
+def _check_empty_main(html: str, min_chars: int = 120) -> list[str]:
+    """
+    Detecte une slide quasi vide : moins de min_chars caracteres de texte
+    visible. 'QA PASS' sur une slide vide etait le piege n°3 du guide —
+    ce check le ferme partiellement.
+    """
+    text = _visible_text(html)
+    compact = re.sub(r"\s+", " ", text).strip()
+    if len(compact) < min_chars:
+        return [f"vide:texte visible {len(compact)} car. (< {min_chars}) — slide probablement vide"]
+    return []

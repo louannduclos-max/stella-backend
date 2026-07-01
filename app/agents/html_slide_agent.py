@@ -55,7 +55,7 @@ SKILLS_DIR = Path(__file__).parent.parent / "skills"
 
 SECTION_DATA_KEYS: dict[str, list[str]] = {
     "executive_summary":    ["metrics", "verdict", "score_composite",
-                             "market_sizing", "funding_scale"],
+                             "market_sizing", "funding_scale", "narratives"],
     "benchmark_comparison": ["benchmark_rows"],
     "funding_feasibility":  ["funding_scale", "market_sizing"],
     "demographics":         ["demographics_pie", "metrics"],
@@ -66,9 +66,11 @@ SECTION_DATA_KEYS: dict[str, list[str]] = {
                              "competitors_total_count", "competition_avg_rating"],
     "competition_mapping":  ["competition_table", "competitors_top",
                              "competitors_total_count", "competition_avg_rating"],
-    "verdict":              ["verdict", "scores_radar", "score_composite"],
+    "verdict":              ["verdict", "scores_radar", "score_composite", "narratives"],
     "swot":                 ["scores"],
-    "action_plan":          ["action_plan"],
+    # Fix Sprint 13 : manifest n'a AUCUNE clé "action_plan" — la slide recevait
+    # {action_plan: null}. Les actions réelles sont dans narratives (action_30d/60d/90d).
+    "action_plan":          ["narratives", "verdict"],
     # Sprint 11 — sections manquantes (TypeError sur fallback dict[:8])
     # "study" EXCLU de geo_analysis : contient created_at/updated_at (datetime) non-sérialisables
     # par json.dumps dans _build_prompt → TypeError → crash worker → "Failed to fetch"
@@ -168,6 +170,10 @@ Règles ABSOLUES :
 4. Tu ne génères PAS de <script> sauf si les instructions de section l'autorisent explicitement pour un graphique Chart.js.
 5. Le HTML doit être directement insérable dans {MAIN_CONTENT} du template.
 6. Langue : {LANGUAGE}.
+7. Tu écris les VALEURS LITTÉRALES dans le HTML — JAMAIS de syntaxe de template
+   ou de placeholder. INTERDIT : "{{valeur}}", "{% for %}", "${valeur}", "[VALEUR]".
+   Quand les instructions disent "recopier competition_table.count_total",
+   tu écris le nombre lui-même (ex: 32), pas le nom de la variable.
 """
 
 def _build_prompt(
@@ -220,7 +226,10 @@ def _call_gemini_html(prompt: str, api_key: str, max_tokens: int = _DEFAULT_MAX_
         },
         "contents": [{"parts": [{"text": prompt}]}],
         "generationConfig": {
-            "temperature": 0.4,
+            # Sprint 13 : 0.4 → 0.2. Travail de recopie/mise en forme, pas de
+            # créativité. Observé en prod à 0.4 : une génération sur N sort un
+            # template Jinja au lieu des valeurs (gallery Bordeaux 01/07).
+            "temperature": 0.2,
             "maxOutputTokens": max_tokens,
         },
     }

@@ -2,7 +2,8 @@
 
 ## Données disponibles
 
-`scores` : liste de {score_id, label, value, weight, interpretation}
+`scores` : objet `{count, items, by_id}` — utiliser `scores.items`,
+liste de {score_id, label, value, weight, interpretation}
 - Valeur positive élevée → force / opportunité
 - Valeur faible → faiblesse / menace
 - `interpretation` : phrase d'interprétation fournie

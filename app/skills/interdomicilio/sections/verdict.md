@@ -2,7 +2,7 @@
 
 ## Données disponibles
 
-- `verdict` : "GO" | "GO_CONDITIONALLY" | "NO_GO" | null
+- `verdict` : "GO" | "GO_CONDITIONAL" | "NO_GO" | null
 - `score_composite` : float 0-100 ou null
 - `scores_radar` : {"labels": [...], "values": [...]} (pré-calculé)
   - labels : noms des dimensions d'analyse
@@ -14,7 +14,7 @@
 
 1. **Bandeau verdict** (pleine largeur, hauteur réduite) :
    - "GO" → fond `#16A34A` + icône `fa-circle-check` + "Faisabilité confirmée"
-   - "GO_CONDITIONALLY" → fond `#EA580C` + icône `fa-triangle-exclamation` + "Faisabilité conditionnelle"
+   - "GO_CONDITIONAL" → fond `#EA580C` + icône `fa-triangle-exclamation` + "Faisabilité conditionnelle"
    - "NO_GO" → fond `#DC2626` + icône `fa-circle-xmark` + "Faisabilité insuffisante"
 
 2. **Ligne 2 colonnes** :

@@ -4,15 +4,17 @@
 
 - `demographics_pie` : {"labels": ["60 ans et +", "Moins de 60 ans"], "values": [X, 100-X]}
   - Valeurs pré-calculées — recopier sans recalculer
-- `metrics` : liste complète des métriques (filtrer par metric_id pour cette section)
-  - `population_totale` ou `total_population` : population de la zone
+- `metrics` : objet `{count, items, by_id}` — chercher par `metric_id` EXACT dans `by_id` :
+  - `population_total` : population de la zone (habitants)
   - `seniors_60_plus_share` : part des 60 ans et + (%)
-  - `dependency_ratio` ou `taux_dependance` : taux de dépendance
-  - `median_age` ou `age_median` : âge médian
-  - `avg_household_size` : taille moyenne des ménages
-  - `lone_elderly_share` : part des personnes âgées vivant seules
+  - `seniors_75_plus_share` : part des 75 ans et + (%)
+  - `single_senior_households` : ménages seniors vivant seuls (ménages)
+  - `dependency_ratio_apa` : taux de dépendance APA
+  - `population_growth_5y` : croissance de population sur 5 ans (%)
 
-**RÈGLE** : N'afficher que les métriques effectivement présentes dans le manifest.
+**RÈGLE** : ces metric_id sont les SEULS valides pour cette section. Un id absent
+du JSON → ne pas afficher la card (jamais de valeur voisine ni d'id inventé,
+il n'existe PAS de `median_age` dans les données).
 
 ## Layout attendu
 

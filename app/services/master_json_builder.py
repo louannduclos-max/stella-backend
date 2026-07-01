@@ -89,6 +89,12 @@ class MasterJsonBuilder:
             "narratives": study.narratives or {},
             # Score composite pondéré
             "score_composite": self._compute_composite(study),
+            # Verdict au top-level (fix Sprint 13) : SECTION_DATA_KEYS["verdict"]
+            # et la branche prod lisaient manifest["verdict"] qui n'existait pas
+            # (il n'était que dans manifest["study"]["verdict"]) → slide verdict
+            # sans verdict. Valeur string ("GO"/"GO_CONDITIONAL"/"NO_GO").
+            "verdict": (study.verdict.value if hasattr(study.verdict, "value")
+                        else study.verdict),
             # ─── Data-Depth sprint ────────────────────────────────────────────
             # Concurrents nommés Google Places (Chantier 2)
             "competitors_top": competitors_top,          # jusqu'à 10 acteurs nommés

@@ -164,96 +164,46 @@ def _resolve_brand_slug(study: Study) -> str | None:
 def _prepare_section_data(study: Study, section_id: str, manifest: dict) -> dict:
     """
     Extrait du manifest uniquement les donnees pertinentes pour la section.
-    Les noms externes (Places) sont sanitises avant d'entrer dans le prompt Gemini.
-    Ne jamais passer le manifest complet au LLM (limite tokens + risque d'invention).
 
-    Sprint 10 : les valeurs derivees (benchmark_rows, demographics_pie, scores_radar,
-    competition_avg_rating) sont pre-calculees par slide_precompute.py et presentes
-    dans le manifest. L'agent les recopie, il ne calcule rien.
+    RÉÉCRIT Sprint 13 — UNE SEULE SOURCE DE MAPPING : SECTION_DATA_KEYS
+    (html_slide_agent). L'ancienne version dupliquait le mapping en branches
+    if/elif locales, systématiquement désynchronisées :
+      - geo_analysis / market_overview : aucune branche → fallback metrics[:8],
+        jamais de microzones ni market_sizing (constaté : slides pleines de n.d.)
+      - verdict : lisait manifest["verdict"] inexistant au top-level
+      - competition : competition_table jamais transmise (Sprint 12 cassé)
+    Constat gallery 01/07 : 5 sections sur 10 en QA FAIL, 4 affamées de données.
+
+    Les noms externes (Places) sont sanitisés avant d'entrer dans le prompt.
+    Ne jamais passer le manifest complet au LLM.
     """
+    from app.agents.html_slide_agent import _filter_section_data
     from app.agents.sanitize import (
         sanitize_competition_table,
         sanitize_competitors_for_prompt,
     )
 
-    base = {
+    data = _filter_section_data(section_id, manifest)
+
+    # Sanitisation des données externes (Places) pour la concurrence
+    if section_id in ("competition", "competition_mapping"):
+        if data.get("competition_table"):
+            data["competition_table"] = sanitize_competition_table(
+                data["competition_table"]
+            )
+        if data.get("competitors_top"):
+            data["competitors_top"] = sanitize_competitors_for_prompt(
+                data["competitors_top"]
+            )
+
+    # Contexte interne (sûr) — utilisé par les .md des sections
+    data.update({
         "zone": study.geo_scope.city or "",
         "brand_name": study.business_context.brand_name or "",
         "year": "2026",
         "language": study.language or "fr",
-    }
-
-    if section_id == "competition" or section_id == "competition_mapping":
-        return {
-            **base,
-            # Sprint 13 — competition_table transmise au prompt. Sprint 12 avait mis
-            # à jour SECTION_DATA_KEYS mais PAS ce chemin de prod : sans cette clé,
-            # le skill n'a jamais les domaines/badges Direct à recopier.
-            "competition_table": sanitize_competition_table(
-                manifest.get("competition_table")
-            ),
-            "competitors_top": sanitize_competitors_for_prompt(
-                manifest.get("competitors_top", [])
-            ),
-            "competitors_total_count": manifest.get("competitors_total_count", 0),
-            "competition_avg_rating": manifest.get("competition_avg_rating"),
-        }
-
-    if section_id == "executive_summary":
-        return {
-            **base,
-            "market_sizing": manifest.get("market_sizing", {}),
-            "funding_scale": manifest.get("funding_scale", {}),
-            "verdict": manifest.get("verdict"),
-            "score_composite": manifest.get("score_composite"),
-        }
-
-    if section_id == "benchmark_comparison":
-        # benchmark_rows contient gap_display pre-calcule — l'agent recopie
-        return {
-            **base,
-            "benchmark_rows": manifest.get("benchmark_rows", []),
-        }
-
-    if section_id == "funding_feasibility":
-        return {
-            **base,
-            "funding_scale": manifest.get("funding_scale", {}),
-            "market_sizing": manifest.get("market_sizing", {}),
-        }
-
-    if section_id == "demographics":
-        # demographics_pie contient le complement pre-calcule — l'agent recopie
-        # Fix Sprint 13 : manifest["metrics"] est un dict {count, items, by_id} —
-        # l'ancien manifest.get("metrics", [])[:8] levait TypeError (slice sur dict)
-        # → la slide demographics partait TOUJOURS en fallback en prod.
-        _metrics_obj = manifest.get("metrics") or {}
-        _metric_items = _metrics_obj.get("items", []) if isinstance(_metrics_obj, dict) else _metrics_obj
-        return {
-            **base,
-            "demographics_pie": manifest.get("demographics_pie"),
-            "metrics": _metric_items[:8],
-        }
-
-    if section_id == "verdict":
-        # scores_radar contient les valeurs arrondies pre-calculees
-        return {
-            **base,
-            "verdict": manifest.get("verdict"),
-            "scores_radar": manifest.get("scores_radar"),
-            "score_composite": manifest.get("score_composite"),
-        }
-
-    if section_id == "swot":
-        return {
-            **base,
-            "scores": manifest.get("scores", {}).get("items", []),
-        }
-
-    return {
-        **base,
-        "metrics": manifest.get("metrics", {}).get("items", manifest.get("metrics", []))[:8],
-    }
+    })
+    return data
 
 
 # -----------------------------------------------------------------------------
