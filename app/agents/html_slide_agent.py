@@ -67,7 +67,9 @@ SECTION_DATA_KEYS: dict[str, list[str]] = {
     "swot":                 ["scores"],
     "action_plan":          ["action_plan"],
     # Sprint 11 — sections manquantes (TypeError sur fallback dict[:8])
-    "geo_analysis":         ["metrics", "microzones", "study"],
+    # "study" EXCLU de geo_analysis : contient created_at/updated_at (datetime) non-sérialisables
+    # par json.dumps dans _build_prompt → TypeError → crash worker → "Failed to fetch"
+    "geo_analysis":         ["metrics", "microzones"],
     "market_overview":      ["metrics", "market_sizing", "competitors_total_count"],
 }
 
