@@ -29,6 +29,9 @@
    - `avg_hourly_price_care` + "€/h" + label "Prix horaire moyen" — icône `fa-euro-sign`
 
 2. **Encart synthèse marché** (strategic-box étendue) :
+   - PLEINE LARGEUR obligatoire : `display:block; width:100%` — ne JAMAIS placer
+     cet encart dans une colonne flex étroite (bug constaté : texte rendu
+     verticalement, un mot par ligne)
    - 3 phrases sur la taille et la structure du marché, en citant UNIQUEMENT
      des valeurs affichées dans les cards ci-dessus
    - Icône `fa-globe`, couleur primaire

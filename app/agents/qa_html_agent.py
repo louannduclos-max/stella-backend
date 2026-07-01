@@ -33,6 +33,17 @@ import re
 # Normalisation des nombres
 # -----------------------------------------------------------------------------
 
+# Fix Sprint 13b — l'ancienne regex \d[\d\s.,]*\d collait deux nombres adjacents
+# a travers les sauts de ligne ("48238 \n 28.0" devenait le token "48238...28.0"
+# → normalise "48238280" introuvable → FAUX POSITIF sur des valeurs 100 % tracees).
+# Nouvelle regex : nombre a groupes de milliers francais (espace/insecable/fine)
+# OU nombre simple avec decimale — jamais de \n ni de doubles espaces.
+_NUM_RE = re.compile(
+    r"\d{1,3}(?:[   ]\d{3})+(?:[.,]\d+)?"   # 2 251 / 267 991 / 1 447,54
+    r"|\d+(?:[.,]\d+)?"                                # 48238 / 28.0 / 4,6
+)
+
+
 def _numbers(text: str) -> list[str]:
     """
     Extrait les nombres significatifs d'un texte, apres avoir retire
@@ -40,12 +51,36 @@ def _numbers(text: str) -> list[str]:
     Retourne des chaines brutes (avec eventuels separateurs).
     """
     text = re.sub(r"\d+(\.\d+)?(px|em|rem|%|vh|vw|pt|s|ms|deg)\b", " ", text)
-    return re.findall(r"\d[\d\s.,]*\d|\d+", text)
+    # "/100" (denominateur d'echelle des scores, ex "43.1/100") n'est pas une donnee
+    text = re.sub(r"/\s*100\b", " ", text)
+    return _NUM_RE.findall(text)
 
 
 def _normalize(n: str) -> str:
     """Normalise un nombre : retire separateurs d'espace/virgule/point pour comparaison."""
-    return re.sub(r"[\s,.]", "", n)
+    return re.sub(r"[\s  ,.]", "", n)
+
+
+def _candidates(raw: str) -> set[str]:
+    """
+    Formes equivalentes d'un nombre pour la recherche dans l'index manifest.
+
+    Fix Sprint 13b : "28.0" affiche pour la valeur manifest 28 est la MEME donnee,
+    pas une invention. On genere donc aussi la forme entiere ("28.0" → "28")
+    et la forme sans zero final ("4.60" → "4.6").
+    """
+    cands = {_normalize(raw)}
+    numeric = raw.replace(" ", "").replace(" ", "").replace(" ", "").replace(",", ".")
+    try:
+        x = float(numeric)
+        if x == int(x):
+            cands.add(str(int(x)))
+        # forme decimale canonique sans zeros de queue ("4.60" → "46" deja couvert,
+        # "28.0" → "28")
+        cands.add(re.sub(r"[\s,.]", "", repr(x).rstrip("0").rstrip(".")))
+    except ValueError:
+        pass
+    return cands
 
 
 def _manifest_index(manifest: dict) -> str:
@@ -77,6 +112,9 @@ def _visible_text(html: str) -> str:
     text = _STRIP_SCRIPT_STYLE.sub(" ", html)
     text = _STRIP_COMMENTS.sub(" ", text)
     text = _STRIP_TAGS.sub(" ", text)
+    # Fix Sprint 13b : decoder les separateurs de milliers en entites HTML
+    # ("2&nbsp;251") sinon l'extracteur voit "2" et "251" separement.
+    text = re.sub(r"&(nbsp|#160|#8239|thinsp);", " ", text)
     return text
 
 
@@ -93,7 +131,8 @@ def _check_visible_numbers(html: str, idx: str) -> list[str]:
             continue
         if _YEAR_PATTERN.match(clean):
             continue
-        if clean not in idx:
+        # Fix Sprint 13b : accepter les formes equivalentes ("28.0" == 28)
+        if not any(c in idx for c in _candidates(raw)):
             issues.append(f"texte:{raw.strip()}")
     return issues
 
@@ -119,7 +158,8 @@ def _check_chartjs_data(html: str, idx: str) -> list[str]:
                 continue
             if _YEAR_PATTERN.match(clean):
                 continue
-            if clean not in idx:
+            # Fix Sprint 13b : formes equivalentes ("28.0" == 28)
+            if not any(c in idx for c in _candidates(n)):
                 issues.append(f"chart:{n}")
     return issues
 

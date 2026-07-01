@@ -9,6 +9,11 @@
   <!-- Fonts & icons (CDN OK pour viewer web) -->
   <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800&family=Open+Sans:wght@400;600;700&display=swap" rel="stylesheet" />
   <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet" />
+  <!-- Chart.js (fix Sprint 13b) : les .md demographics/verdict demandent un donut
+       et un radar mais Chart.js n'etait PAS charge → new Chart() levait une
+       ReferenceError silencieuse, les graphiques n'apparaissaient jamais.
+       Version epinglee. Pour l'export PPTX, pre-rendre en image (backlog). -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <!-- NOTE: Tailwind CDN supprime (dev-only, casse en prod et export LibreOffice).
        Remplace par CSS utilitaires inline ci-dessous (~15kB, couvre toutes les classes skill). -->
 

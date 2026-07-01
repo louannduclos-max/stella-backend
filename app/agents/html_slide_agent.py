@@ -71,6 +71,12 @@ SECTION_DATA_KEYS: dict[str, list[str]] = {
     # Fix Sprint 13 : manifest n'a AUCUNE clé "action_plan" — la slide recevait
     # {action_plan: null}. Les actions réelles sont dans narratives (action_30d/60d/90d).
     "action_plan":          ["narratives", "verdict"],
+    # Sprint 13b — nouvelles slides (données 100 % présentes dans le manifest)
+    "cover":                ["verdict", "score_composite", "competitors_total_count",
+                             "metrics"],
+    "employment_talent":    ["metrics"],
+    "income_housing":       ["metrics"],
+    "methodology_sources":  ["sources"],
     # Sprint 11 — sections manquantes (TypeError sur fallback dict[:8])
     # "study" EXCLU de geo_analysis : contient created_at/updated_at (datetime) non-sérialisables
     # par json.dumps dans _build_prompt → TypeError → crash worker → "Failed to fetch"
@@ -88,12 +94,18 @@ SECTION_MAX_TOKENS: dict[str, int] = {
     "competition_mapping":  6144,
     "competition":          6144,
     "funding_feasibility":  3500,
-    "executive_summary":    4096,
+    # Sprint 13b : html_tronque observe a 4096 (div 17/16) avec narratives ajoutees
+    "executive_summary":    6144,
     "demographics":         4096,
     "verdict":              4096,
     "swot":                 3500,
     "geo_analysis":         4096,
     "market_overview":      4096,
+    # Sprint 13b — nouvelles slides
+    "cover":                3000,
+    "employment_talent":    4096,
+    "income_housing":       4096,
+    "methodology_sources":  6144,  # tableau 10 lignes + légende
 }
 _DEFAULT_MAX_TOKENS = 3000
 

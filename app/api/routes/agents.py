@@ -566,9 +566,12 @@ def debug_slides_gallery(study_id: str) -> object:
         raise HTTPException(404, f"Study '{study_id}' not found")
 
     sections = [
-        "executive_summary", "demographics", "geo_analysis", "market_overview",
+        # Ordre deck (Sprint 13b : + cover, employment_talent, income_housing,
+        # methodology_sources)
+        "cover", "executive_summary", "market_overview", "demographics",
+        "employment_talent", "income_housing", "geo_analysis",
         "benchmark_comparison", "competition_mapping", "funding_feasibility",
-        "swot", "verdict", "action_plan",
+        "swot", "verdict", "action_plan", "methodology_sources",
     ]
     city = study.geo_scope.city or ""
 
