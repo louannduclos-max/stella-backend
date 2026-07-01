@@ -66,6 +66,9 @@ SECTION_DATA_KEYS: dict[str, list[str]] = {
     "verdict":              ["verdict", "scores_radar", "score_composite"],
     "swot":                 ["scores"],
     "action_plan":          ["action_plan"],
+    # Sprint 11 — sections manquantes (TypeError sur fallback dict[:8])
+    "geo_analysis":         ["metrics", "microzones", "study"],
+    "market_overview":      ["metrics", "market_sizing", "competitors_total_count"],
 }
 
 # maxOutputTokens calibre par section — evite la troncature HTML
@@ -92,7 +95,10 @@ def _filter_section_data(section_id: str, manifest: dict) -> dict:
     if keys:
         return {k: manifest.get(k) for k in keys}
     # Defaut : les 8 premieres metriques (sections sans mapping explicite)
-    return {"metrics": (manifest.get("metrics") or [])[:8]}
+    # ATTENTION : manifest["metrics"] est un dict {count, items, by_id} — pas une list
+    metrics_obj = manifest.get("metrics") or {}
+    items = metrics_obj.get("items", []) if isinstance(metrics_obj, dict) else []
+    return {"metrics": items[:8]}
 
 
 # ─────────────────────────────────────────────────────────────────────────────
