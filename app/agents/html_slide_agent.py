@@ -75,9 +75,10 @@ SECTION_MAX_TOKENS: dict[str, int] = {
     "competition_mapping":  4096,
     "competition":          4096,
     "funding_feasibility":  3500,
-    "executive_summary":    3500,
-    "demographics":         3000,
-    "verdict":              3000,
+    "executive_summary":    4096,
+    "demographics":         4096,
+    "verdict":              4096,
+    "swot":                 3500,
 }
 _DEFAULT_MAX_TOKENS = 3000
 
@@ -138,7 +139,7 @@ Règles ABSOLUES :
 1. Tu génères UNIQUEMENT le bloc <main> intérieur — jamais de <html>, <head>, <body>, <style> globaux.
 2. Tu utilises EXCLUSIVEMENT les classes CSS définies dans base_slide.html (kpi-row, kpi-card, comp-table, etc.).
 3. Tu n'inventes AUCUNE valeur absente des données fournies. Si une donnée manque : "n.d."
-4. Tu ne génères PAS de <script> pour cette slide.
+4. Tu ne génères PAS de <script> sauf si les instructions de section l'autorisent explicitement pour un graphique Chart.js.
 5. Le HTML doit être directement insérable dans {MAIN_CONTENT} du template.
 6. Langue : {LANGUAGE}.
 """
@@ -174,7 +175,8 @@ Classes : kpi-row, kpi-card, kpi-icon, kpi-value, kpi-label,
 ## Consigne
 
 Génère UNIQUEMENT le HTML intérieur du bloc <main class="slide-body">.
-Pas de doctype, pas de <html>, pas de <head>, pas de <style> globaux, pas de <script>.
+Pas de doctype, pas de <html>, pas de <head>, pas de <style> globaux.
+Si les instructions de section autorisent un graphique Chart.js, tu peux inclure un bloc <script> apres le contenu principal.
 Commence directement par les éléments de contenu (div, table, etc.).
 """
 
