@@ -425,24 +425,26 @@ def debug_html_slide(
 
     manifest = master_json_builder.build(study)
 
-    # Données passées au LLM : uniquement ce dont la slide a besoin
-    # (pas tout le manifest, pour limiter tokens et risque d'invention)
-    # Les noms Places sont sanitisés (B — injection de prompt)
-    section_data: dict = {}
-    if section_id == "competition":
-        section_data = {
+    # Donnees passees au LLM : filtrage par section (Chantier E)
+    # Pour competition/competition_mapping : sanitise les noms Places (anti-injection)
+    # Pour toutes les autres sections : _filter_section_data sur le manifest complet
+    from app.agents.html_slide_agent import _filter_section_data as _fsd
+    if section_id in ("competition", "competition_mapping"):
+        section_data: dict = {
             "competitors_top": sanitize_competitors_for_prompt(
                 manifest.get("competitors_top", [])
             ),
             "competitors_total_count": manifest.get("competitors_total_count", 0),
+            "competition_avg_rating": manifest.get("competition_avg_rating"),
             "zone": study.geo_scope.city or "",
             "brand_name": study.business_context.brand_name or "",
         }
+    else:
+        section_data = _fsd(section_id, manifest)
 
     logger.info(
-        "[debug/html-slide] study=%s section=%s competitors=%d",
-        study_id, section_id,
-        len(section_data.get("competitors_top", [])),
+        "[debug/html-slide] study=%s section=%s data_keys=%s",
+        study_id, section_id, list(section_data.keys()),
     )
 
     main_content = html_slide_agent.generate_main_content(
@@ -491,13 +493,52 @@ def debug_html_slide(
         }
 
 
+@router.get("/debug/manifest")
+def debug_manifest(study_id: str) -> dict:
+    """
+    Retourne les valeurs Sprint 10 precalculees pour une etude (debug).
+
+    Verifie que slide_precompute.py a bien calcule :
+    benchmark_rows, demographics_pie, scores_radar, competition_avg_rating.
+
+    Usage :
+      GET /agents/debug/manifest?study_id=18f460c9-245b-4443-aa65-23eb2032089c
+    """
+    import json
+    from app.repositories.studies_repo import studies_repo
+    from app.services.master_json_builder import master_json_builder
+
+    study = studies_repo.get(study_id)
+    if not study:
+        raise HTTPException(404, f"Study '{study_id}' not found")
+
+    manifest = master_json_builder.build(study)
+
+    sprint10_check = {
+        "benchmark_rows_count":   len(manifest.get("benchmark_rows") or []),
+        "benchmark_rows_sample":  (manifest.get("benchmark_rows") or [])[:2],
+        "demographics_pie":       manifest.get("demographics_pie"),
+        "scores_radar":           manifest.get("scores_radar"),
+        "competition_avg_rating": manifest.get("competition_avg_rating"),
+        "competitors_top_count":  len(manifest.get("competitors_top") or []),
+        "funding_scale_present":  manifest.get("funding_scale") is not None,
+        "market_sizing_present":  manifest.get("market_sizing") is not None,
+    }
+
+    logger.info("[debug/manifest] study=%s sprint10=%s", study_id, sprint10_check)
+
+    return {
+        "study_id": study_id,
+        "sprint10_precompute": sprint10_check,
+        "manifest_keys": list(manifest.keys()),
+        "manifest_full": json.loads(json.dumps(manifest, default=str)),
+    }
+
+
 @router.post("/visual-qa/report", response_model=AgentResponse)
 def submit_visual_qa_report(report: VisualQAReport) -> AgentResponse:
     """
     Soumettre un rapport de QA visuelle depuis l'agent Visual QA.
-
-    Le backend enregistre les issues et peut déclencher une re-génération
-    ou un marquage de statut 'qa_failed' si des erreurs bloquantes sont détectées.
     """
     from app.repositories.studies_repo import studies_repo
 
@@ -517,15 +558,12 @@ def submit_visual_qa_report(report: VisualQAReport) -> AgentResponse:
     if report.overall_status == "fail" or len(errors) > 0:
         return _make_response(
             "accepted",
-            f"Rapport QA enregistré — {len(errors)} erreur(s) bloquante(s), statut=fail (re-génération à planifier)",
+            f"QA enregistre - {len(errors)} erreur(s) bloquante(s), statut=fail",
             report.model_dump(),
         )
 
     return _make_response(
         "accepted",
-        f"Rapport QA enregistré — {len(warnings)} avertissement(s), statut={report.overall_status}",
-        report.model_dump(),
-    )
- QA enregistré — {len(warnings)} avertissement(s), statut={report.overall_status}",
+        f"QA enregistre - {len(warnings)} avertissement(s), statut={report.overall_status}",
         report.model_dump(),
     )
