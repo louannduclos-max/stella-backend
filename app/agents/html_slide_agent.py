@@ -59,10 +59,13 @@ SECTION_DATA_KEYS: dict[str, list[str]] = {
     "benchmark_comparison": ["benchmark_rows"],
     "funding_feasibility":  ["funding_scale", "market_sizing"],
     "demographics":         ["demographics_pie", "metrics"],
-    "competition":          ["competitors_top", "competitors_total_count",
-                             "competition_avg_rating"],
-    "competition_mapping":  ["competitors_top", "competitors_total_count",
-                             "competition_avg_rating"],
+    # Sprint 12 : competition_table (directs/indirects + domain + stars pré-calculés)
+    # competition_table est pré-calculé dans slide_precompute._compute_competition_table
+    # competitors_top gardé en fallback si competition_table absent (vieilles études)
+    "competition":          ["competition_table", "competitors_top",
+                             "competitors_total_count", "competition_avg_rating"],
+    "competition_mapping":  ["competition_table", "competitors_top",
+                             "competitors_total_count", "competition_avg_rating"],
     "verdict":              ["verdict", "scores_radar", "score_composite"],
     "swot":                 ["scores"],
     "action_plan":          ["action_plan"],

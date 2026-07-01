@@ -147,6 +147,7 @@ class Competitor(BaseModel):
     category: str | None = None
     distance_min: int | None = None   # minutes voiture (non rempli pour l'instant)
     is_direct_competitor: bool = False
+    domain: str | None = None          # domaine d'expertise (Sprint 12 — déduit par classifier agent)
     source_id: str
     confidence_grade: ConfidenceGrade = ConfidenceGrade.B
 

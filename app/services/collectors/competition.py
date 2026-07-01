@@ -1,5 +1,8 @@
+import logging
 import uuid
 
+from app.agents.competition_classifier_agent import competition_classifier_agent
+from app.agents.sanitize import sanitize_external_text
 from app.api.schemas.common import Competitor, Study
 from app.core.enums import ConfidenceGrade, FreshnessLevel, GeoLevel, SourceType
 from app.core.score_config import DEFAULT_METRIC_BASELINES
@@ -12,6 +15,8 @@ from app.services.external.google_places_api import (
     google_places_new,
 )
 from app.services.external.ine_geo import ine_geo
+
+logger = logging.getLogger(__name__)
 
 
 # Fix 5 — rayon élargi : 8km était trop court pour les villes moyennes/rurales
@@ -94,6 +99,22 @@ class CompetitionCollector(BaseCollector):
             study.competitors = build_competitors_from_places(
                 live15, direct_competitor_names=direct_names, source_id=_competitor_source_id,
             )
+            # Sprint 12 — enrichissement par l'agent classifier (domain + is_direct affiné)
+            # Jamais bloquant : si l'agent échoue, domain reste None → affiché "n.d."
+            try:
+                brand_context = (
+                    brand_profile.get("brand_context")
+                    or brand_profile.get("description")
+                    or "aide à domicile senior"
+                )
+                study.competitors = enrich_competitors_with_classification(
+                    study.competitors, brand_context=brand_context
+                )
+            except Exception as _exc:
+                import logging as _log
+                _log.getLogger(__name__).warning(
+                    "[competition] enrichissement classifier ignoré : %s", _exc
+                )
         else:
             count_15 = DEFAULT_METRIC_BASELINES["competitor_count_15min"]
             count_30 = DEFAULT_METRIC_BASELINES["competitor_count_30min"]
@@ -218,6 +239,61 @@ def build_competitors_from_places(
         ))
 
     competitors.sort(key=lambda c: (not c.is_direct_competitor, -(c.rating or 0)))
+    return competitors
+
+
+def enrich_competitors_with_classification(
+    competitors: list[Competitor],
+    brand_context: str = "aide à domicile senior",
+) -> list[Competitor]:
+    """
+    Enrichit la liste de concurrents factuels avec is_direct affiné et domain déduit.
+
+    PRINCIPE :
+      1. Les certitudes brand_profile (is_direct_competitor=True par keyword matching)
+         NE sont pas écrasées par l'agent.
+      2. L'agent classifie le reste sur nom + types.
+      3. domain = "n.d." si l'agent est incertain ou a échoué.
+      4. Re-tri final : directs d'abord, puis note décroissante.
+
+    Jamais bloquant : si l'agent échoue, competitors est retourné inchangé
+    (avec domain=None → affiché "n.d." côté slide).
+    """
+    if not competitors:
+        return competitors
+
+    # Sanitiser les noms avant envoi à l'agent (anti-injection)
+    payload = [
+        {
+            "name": sanitize_external_text(c.name),
+            "types": sanitize_external_text(c.category or ""),
+        }
+        for c in competitors
+    ]
+
+    # Appel agent — retourne {} si échec
+    classification = competition_classifier_agent.classify(payload, brand_context)
+
+    for c in competitors:
+        safe_name = sanitize_external_text(c.name)
+        cls = classification.get(safe_name)
+        if cls:
+            # Ne pas écraser une certitude issue du keyword matching brand_profile
+            if not c.is_direct_competitor:
+                c.is_direct_competitor = cls["is_direct"]
+            c.domain = cls["domain"]
+        else:
+            # Agent n'a pas retourné de classification pour cet acteur
+            if c.domain is None:
+                c.domain = "n.d."
+
+    # Re-tri : directs d'abord, puis par note décroissante
+    competitors.sort(key=lambda c: (not c.is_direct_competitor, -(c.rating or 0)))
+    logger.info(
+        "[enrich_competitors] %d directs / %d total après classification",
+        sum(1 for c in competitors if c.is_direct_competitor),
+        len(competitors),
+    )
     return competitors
 
 

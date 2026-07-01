@@ -1,41 +1,64 @@
-# Section : Cartographie concurrentielle (vue synthétique)
+# Section : Cartographie concurrentielle
 
 ## Données disponibles
 
-- `competitors_top` : liste des concurrents (max 10), chaque item :
+`competition_table` (pré-calculé — recopier tel quel, NE PAS recalculer) :
+- `count_total` : nombre total d'acteurs collectés
+- `count_direct` : nombre de concurrents directs
+- `avg_rating` : note moyenne des acteurs (float ou null)
+- `directs` : liste des concurrents directs (max 8), chacun avec :
   - `name` : nom de l'acteur
-  - `is_direct_competitor` : bool
-  - `rating` : float ou null
-  - `review_count` : int ou null
-  - `address` : adresse complète
-  - `source_id` : "google_places_new" ou "google_places_legacy"
-- `competitors_total_count` : nombre total identifiés
-- `competition_avg_rating` : moyenne des notes (pré-calculée) ou null
+  - `domain` : domaine d'expertise déduit (ex: "Aide à domicile senior") ou "n.d."
+  - `rating` : note Google (float ou null)
+  - `stars` : chaîne d'étoiles pré-calculée (ex: "★★★★☆") ou null
+  - `reviews` : nombre d'avis (int ou null)
+- `indirects` : liste des concurrents indirects (max 6), même structure
 
-**RÈGLE** : `competition_avg_rating` est pré-calculé — ne pas recalculer depuis `competitors_top`.
+## Layout attendu
 
-## Layout attendu (identique à competition mais avec badge source)
+### 1. Ligne de 3 KPI cards
 
-1. **Ligne de 3 KPI cards** :
-   - Acteurs totaux (`competitors_total_count`)
-   - Concurrents directs (compter `is_direct_competitor=true` dans `competitors_top`)
-   - Note moyenne (`competition_avg_rating`, 1 décimale, "n.d." si null)
-   - Icônes : `fa-store`, `fa-users`, `fa-star`
+- Acteurs identifiés → `competition_table.count_total` — icône `fa-store`
+- Concurrents directs → `competition_table.count_direct` — icône `fa-users`
+- Note moyenne → `competition_table.avg_rating` (1 décimale) ou "n.d." — icône `fa-star`
 
-2. **Tableau des concurrents** (`comp-table`) :
-   - Colonnes : Nom | Type | Note ★ | Avis | Statut
-   - Ligne directe : classe `is-direct` + badge "Direct" jaune `#FFCC00`
-   - Note : "★ 4.5" ou "n.d." si null
-   - Avis : nombre entre parenthèses ou omis si null
-   - Si `competitors_total_count > 10` : sous-titre "10 principaux sur N identifiés"
+### 2. Tableau des concurrents (comp-table)
 
-3. **Strategic box** :
-   - Analyser : pression concurrentielle (nombre directs vs. indirects), niveau qualitatif (note moyenne)
-   - Citer les chiffres du manifest — jamais inventés
-   - Icône `fa-map-location-dot`
+Colonnes : **Nom** | **Domaine d'expertise** | **Note** | **Statut**
 
-## Règles
+- Afficher TOUJOURS les concurrents `directs` en premier (class `is-direct` sur leur ligne),
+  puis les `indirects`.
+- Colonne **Note** : afficher `rating` en gras, et `stars` en dessous en plus petit
+  (classe `rating-stars`). Si `rating` null → "n.d.", pas d'étoiles.
+- Colonne **Statut** :
+  - Directs → badge "Direct" classe `badge-direct`
+  - Indirects → badge "Indirect" classe `badge-indirect`
+- Colonne **Domaine** : recopier `domain` tel quel. Si "n.d." → italique grisé.
+- Si `count_total > 14` : ajouter sous-titre "14 principaux sur N identifiés".
 
-- Si `competitors_top` vide : afficher "Aucun concurrent identifié dans la zone" dans le tableau
-- Ne jamais inventer de noms, notes ou adresses
-- Classes : `kpi-row`, `kpi-card`, `comp-table`, `is-direct`, `badge-direct`, `badge-indirect`, `strategic-box`
+### 3. Strategic box
+
+- Citer `count_direct` et `count_total` (réels, jamais inventés)
+- Citer `avg_rating` si non null
+- Analyser la pression concurrentielle (directs vs. indirects) et le niveau qualitatif
+- Icône `fa-map-location-dot`
+
+## Cas edge
+
+- `count_total = 0` : afficher "Aucun acteur identifié dans la zone" dans le tableau.
+  Strategic box : "marché peu dense ou collecte à approfondir."
+- Tous les `domain` à "n.d." : on peut masquer la colonne Domaine pour alléger.
+
+## Règles ABSOLUES
+
+- Recopier `name`, `domain`, `rating`, `stars`, `reviews` verbatim.
+- NE JAMAIS recalculer les étoiles — elles sont dans `stars`, pré-calculées.
+- NE JAMAIS recalculer `avg_rating` — il est dans `competition_table.avg_rating`.
+- NE JAMAIS ajouter un concurrent absent de `competition_table`.
+- NE JAMAIS inventer un domaine si "n.d." est fourni.
+
+## Classes CSS
+
+`kpi-row`, `kpi-card`, `kpi-icon`, `kpi-value`, `kpi-label`,
+`comp-table`, `is-direct`, `badge-direct`, `badge-indirect`,
+`rating-stars`, `strategic-box`, `strat-icon`, `section-accent-bar`
