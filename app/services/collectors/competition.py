@@ -167,11 +167,13 @@ class CompetitionCollector(BaseCollector):
             classification = classify_competitors(places15)
             return places15, places30, classification
         else:
-            # Legacy Nearby Search (défaut — actif tant que probe non confirmé)
-            if not google_places.is_configured() or lat is None or lon is None:
+            # Legacy Text Search (NearbySearch etait bloque — probe confirme TextSearch OK)
+            # lat/lon passes pour retrocompatibilite mais non utilises en textsearch.
+            if not google_places.is_configured():
                 return None, None, {}
-            places15 = google_places.search_competitors(lat, lon, country, RADIUS_15MIN_M)
-            places30 = google_places.search_competitors(lat, lon, country, RADIUS_30MIN_M)
+            places15 = google_places.search_competitors(lat, lon, country, RADIUS_15MIN_M, city=city)
+            # TextSearch ne distingue pas le rayon → places30 = places15 (approx identique a New API)
+            places30 = places15
             classification = classify_competitors(places15)
             return places15, places30, classification
 

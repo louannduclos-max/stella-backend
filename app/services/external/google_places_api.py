@@ -84,7 +84,11 @@ def _competition_queries(city: str, country: str) -> list[str]:
 
 
 class GooglePlacesClient:
-    """Client Google Places API Legacy -- Nearby Search. Actif si USE_NEW_PLACES_API=false."""
+    """
+    Client Google Places API Legacy.
+    Utilise Text Search (TEXT_URL) — NearbySearch est deprecie / bloque sur cette cle.
+    lat/lon conserves dans la signature pour retrocompatibilite (non utilises en textsearch).
+    """
 
     def __init__(self, timeout: float = 10.0):
         self.timeout = timeout
@@ -93,21 +97,30 @@ class GooglePlacesClient:
     def is_configured(self) -> bool:
         return bool(self.api_key)
 
-    def search_competitors(self, lat: float, lon: float, country: str, radius_m: int) -> list[dict]:
+    def search_competitors(
+        self, lat: float, lon: float, country: str, radius_m: int, city: str = ""
+    ) -> list[dict]:
+        """
+        Cherche les acteurs SAP via Text Search.
+        NearbySearch (nearbysearch) etait bloque (HTTP 200 mais 0 resultats ou 403).
+        Text Search avec '{keyword} {city}' retourne 20+ resultats fiables (confirme par probe).
+        lat/lon / radius_m conserves pour retrocompatibilite mais non utilises.
+        """
         if not self.is_configured():
             return []
-        keywords = SAP_KEYWORDS_FR if (country or "FR").upper() == "FR" else SAP_KEYWORDS_ES
+        queries = _competition_queries(city, country) if city else (
+            SAP_KEYWORDS_FR if (country or "FR").upper() == "FR" else SAP_KEYWORDS_ES
+        )
         results: dict[str, dict] = {}
-        for kw in keywords:
+        lang = "fr" if (country or "FR").upper() == "FR" else "es"
+        for q in queries:
             try:
                 with httpx.Client(timeout=self.timeout) as client:
                     r = client.get(
-                        NEARBY_URL,
+                        TEXT_URL,
                         params={
-                            "location": f"{lat},{lon}",
-                            "radius": radius_m,
-                            "keyword": kw,
-                            "language": "fr" if (country or "FR").upper() == "FR" else "es",
+                            "query": q,
+                            "language": lang,
                             "key": self.api_key,
                         },
                     )
@@ -122,11 +135,11 @@ class GooglePlacesClient:
                 results[pid] = {
                     "place_id": pid,
                     "name": place.get("name"),
-                    "address": place.get("vicinity"),
+                    "address": place.get("formatted_address") or place.get("vicinity"),
                     "rating": place.get("rating"),
                     "user_ratings_total": place.get("user_ratings_total"),
                     "types": place.get("types", []),
-                    "matched_keyword": kw,
+                    "matched_keyword": q,
                 }
         return list(results.values())
 
