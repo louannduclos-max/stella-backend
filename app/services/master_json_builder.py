@@ -27,8 +27,18 @@ class MasterJsonBuilder:
             study.funding_scale.model_dump(mode="json") if study.funding_scale else None
         )
 
-        # Market sizing (Chantier 3) — stocké en attribut temporaire par le pipeline
-        market_sizing = getattr(study, "_market_sizing", None)
+        # Market sizing (Chantier 3, fix Sprint 13) — champ Pydantic déclaré.
+        # L'ancien attribut dynamique `_market_sizing` levait ValueError sur Pydantic v2
+        # (Study n'autorise pas les attributs non déclarés) → toujours null en prod.
+        # Filet : recalcul direct si le champ est vide (couvre les études legacy
+        # rechargées depuis Supabase sans repasser par le pipeline).
+        market_sizing = getattr(study, "market_sizing", None) or getattr(study, "_market_sizing", None)
+        if market_sizing is None:
+            try:
+                from app.services.market_sizing_engine import market_sizing_engine
+                market_sizing = market_sizing_engine.estimate(study)
+            except Exception:
+                market_sizing = None  # jamais bloquant, jamais d'estimation partielle
 
         manifest = {
             "export_name": "stella_master_json",

@@ -80,8 +80,11 @@ SECTION_DATA_KEYS: dict[str, list[str]] = {
 # Les sections avec tableaux/graphiques ont besoin de plus de tokens
 SECTION_MAX_TOKENS: dict[str, int] = {
     "benchmark_comparison": 4096,
-    "competition_mapping":  4096,
-    "competition":          4096,
+    # Sprint 13 — 6144 : le QA live a montré html_tronque (div open=5 close=3)
+    # à 4096 sur la slide concurrence ; le tableau Sprint 12 (8 directs + 6
+    # indirects × 5 colonnes) a besoin de marge.
+    "competition_mapping":  6144,
+    "competition":          6144,
     "funding_feasibility":  3500,
     "executive_summary":    4096,
     "demographics":         4096,
@@ -93,6 +96,12 @@ SECTION_MAX_TOKENS: dict[str, int] = {
 _DEFAULT_MAX_TOKENS = 3000
 
 
+# Clés de contexte injectées par _prepare_section_data (pipeline) — internes et sûres.
+# Fix Sprint 13 : le double filtrage (_prepare_section_data puis _filter_section_data)
+# les jetait, l'agent perdait zone/brand_name référencés par les .md des sections.
+_BASE_CONTEXT_KEYS = ("zone", "brand_name", "year", "language")
+
+
 def _filter_section_data(section_id: str, manifest: dict) -> dict:
     """
     Retourne uniquement les cles manifest pertinentes pour la section.
@@ -100,7 +109,11 @@ def _filter_section_data(section_id: str, manifest: dict) -> dict:
     """
     keys = SECTION_DATA_KEYS.get(section_id)
     if keys:
-        return {k: manifest.get(k) for k in keys}
+        out = {k: manifest.get(k) for k in keys}
+        for bk in _BASE_CONTEXT_KEYS:
+            if bk in manifest and bk not in out:
+                out[bk] = manifest[bk]
+        return out
     # Defaut : les 8 premieres metriques (sections sans mapping explicite)
     # ATTENTION : manifest["metrics"] est un dict {count, items, by_id} — pas une list
     metrics_obj = manifest.get("metrics") or {}

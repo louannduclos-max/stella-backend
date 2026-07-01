@@ -416,7 +416,6 @@ def debug_html_slide(
     from app.repositories.studies_repo import studies_repo
     from app.agents.html_slide_agent import html_slide_agent
     from app.agents.qa_html_agent import validate_html
-    from app.agents.sanitize import sanitize_competitors_for_prompt
     from app.services.master_json_builder import master_json_builder
 
     study = studies_repo.get(study_id)
@@ -425,31 +424,35 @@ def debug_html_slide(
 
     manifest = master_json_builder.build(study)
 
-    # Donnees passees au LLM : filtrage par section (Chantier E)
-    # Pour competition/competition_mapping : sanitise les noms Places (anti-injection)
-    # Pour toutes les autres sections : _filter_section_data sur le manifest complet
-    from app.agents.html_slide_agent import _filter_section_data as _fsd
-    if section_id in ("competition", "competition_mapping"):
-        section_data: dict = {
-            "competitors_top": sanitize_competitors_for_prompt(
-                manifest.get("competitors_top", [])
-            ),
-            "competitors_total_count": manifest.get("competitors_total_count", 0),
-            "competition_avg_rating": manifest.get("competition_avg_rating"),
-            "zone": study.geo_scope.city or "",
-            "brand_name": study.business_context.brand_name or "",
-        }
-    else:
-        section_data = _fsd(section_id, manifest)
+    # Fix Sprint 13 — le debug utilise EXACTEMENT le même chemin de préparation
+    # que la prod (_prepare_section_data). L'ancien cas spécial divergeait :
+    # pas de competition_table, zone/brand perdus → "QA PASS en debug" ne
+    # prouvait rien sur le pipeline réel.
+    from app.services.slides_5_0_builder import _prepare_section_data
+    section_data = _prepare_section_data(study, section_id, manifest)
 
     logger.info(
         "[debug/html-slide] study=%s section=%s data_keys=%s",
         study_id, section_id, list(section_data.keys()),
     )
 
+    # Fix Sprint 13 — titre et numéro par section (plus de "Cartographie
+    # concurrentielle" en dur sur toutes les slides de debug).
+    from app.services.section_registry import SECTION_REGISTRY
+    _titles = {s["section_id"]: s["display_name"] for s in SECTION_REGISTRY}
+    _numbers = {s["section_id"]: i + 1 for i, s in enumerate(SECTION_REGISTRY)}
+    # Sections skill hors registry (alias/enrichies)
+    _titles.setdefault("competition", "Concurrence")
+    _titles.setdefault("benchmark_comparison", "Benchmark national")
+    _titles.setdefault("funding_feasibility", "Financement & solvabilité")
+    _titles.setdefault("market_overview", "Vue d'ensemble du marché")
+    _titles.setdefault("geo_analysis", "Analyse géographique")
+    section_title = _titles.get(section_id, section_id.replace("_", " ").capitalize())
+    section_number = _numbers.get(section_id, 11)
+
     main_content = html_slide_agent.generate_main_content(
         section_id=section_id,
-        section_number=11,
+        section_number=section_number,
         section_data=section_data,
         brand=study.tenant_id or "interdomicilio",
         language="fr",
@@ -466,8 +469,8 @@ def debug_html_slide(
 
     full_html = html_slide_agent.assemble_slide(
         section_id=section_id,
-        section_number=11,
-        section_title="Cartographie concurrentielle",
+        section_number=section_number,
+        section_title=section_title,
         section_subtitle=f"Marché {study.geo_scope.city or ''}",
         main_content=main_content,
         brand=study.tenant_id or "interdomicilio",
@@ -533,6 +536,99 @@ def debug_manifest(study_id: str) -> dict:
         "manifest_keys": list(manifest.keys()),
         "manifest_full": json.loads(json.dumps(manifest, default=str)),
     }
+
+
+# ---------------------------------------------------------------------------
+# 7bis. Debug — Galerie visuelle (Sprint 13)
+# ---------------------------------------------------------------------------
+
+@router.get("/debug/slides-gallery")
+def debug_slides_gallery(study_id: str) -> object:
+    """
+    Page HTML unique affichant TOUTES les sections d'une étude en iframes.
+
+    Règle de validation Stella : "QA PASS ≠ validé — capture visuelle obligatoire".
+    Cet endpoint rend la validation visuelle possible en UNE navigation au lieu
+    de N appels manuels à /debug/html-slide.
+
+    Zéro coût backend supplémentaire : la page ne fait que pointer des iframes
+    vers /agents/debug/html-slide — chaque slide se génère (ou sort du cache)
+    indépendamment, pas de timeout global.
+
+    Usage :
+      GET /agents/debug/slides-gallery?study_id=29604753-ae5f-4d30-a5ac-04b25be29115
+    """
+    from fastapi.responses import Response as FastAPIResponse
+    from app.repositories.studies_repo import studies_repo
+
+    study = studies_repo.get(study_id)
+    if not study:
+        raise HTTPException(404, f"Study '{study_id}' not found")
+
+    sections = [
+        "executive_summary", "demographics", "geo_analysis", "market_overview",
+        "benchmark_comparison", "competition_mapping", "funding_feasibility",
+        "swot", "verdict", "action_plan",
+    ]
+    city = study.geo_scope.city or ""
+
+    cards = "\n".join(
+        f"""
+        <div class="card">
+          <div class="card-head">
+            <span class="num">{i + 1}</span>
+            <span class="sid">{sid}</span>
+            <a href="/agents/debug/html-slide?study_id={study_id}&section_id={sid}"
+               target="_blank">ouvrir seule ↗</a>
+          </div>
+          <div class="frame-wrap">
+            <iframe loading="lazy" sandbox="allow-scripts"
+                    referrerpolicy="no-referrer"
+                    src="/agents/debug/html-slide?study_id={study_id}&section_id={sid}"></iframe>
+          </div>
+        </div>"""
+        for i, sid in enumerate(sections)
+    )
+
+    html = f"""<!DOCTYPE html>
+<html lang="fr"><head><meta charset="utf-8">
+<title>Stella — Galerie {city} ({study_id[:8]})</title>
+<style>
+  body {{ margin:0; padding:24px; background:#111827; color:#e5e7eb;
+         font-family: system-ui, sans-serif; }}
+  h1 {{ font-size:18px; font-weight:600; }}
+  h1 small {{ color:#9ca3af; font-weight:400; }}
+  .grid {{ display:grid; grid-template-columns:repeat(auto-fill, minmax(660px,1fr));
+           gap:24px; }}
+  .card {{ background:#1f2937; border-radius:10px; padding:12px; }}
+  .card-head {{ display:flex; align-items:center; gap:10px; margin-bottom:8px;
+                font-size:13px; }}
+  .num {{ background:#0095D9; color:#fff; border-radius:6px; padding:1px 8px;
+          font-weight:700; }}
+  .sid {{ flex:1; font-family:monospace; }}
+  .card-head a {{ color:#7dd3fc; text-decoration:none; }}
+  .frame-wrap {{ position:relative; width:100%; aspect-ratio:1280/720;
+                 overflow:hidden; border-radius:6px; background:#fff; }}
+  iframe {{ position:absolute; top:0; left:0; width:1280px; height:720px;
+            border:0; transform-origin:top left; }}
+</style></head>
+<body>
+<h1>Stella — validation visuelle <small>{city} · étude {study_id} ·
+si une slide affiche du JSON = QA FAIL (lire "issues")</small></h1>
+<div class="grid">{cards}</div>
+<script>
+  // Scale chaque iframe 1280x720 dans son conteneur
+  function rescale() {{
+    document.querySelectorAll('.frame-wrap').forEach(w => {{
+      const f = w.querySelector('iframe');
+      f.style.transform = 'scale(' + (w.clientWidth / 1280) + ')';
+    }});
+  }}
+  window.addEventListener('resize', rescale);
+  rescale();
+</script>
+</body></html>"""
+    return FastAPIResponse(content=html, media_type="text/html")
 
 
 @router.delete("/debug/clear-slide-cache")

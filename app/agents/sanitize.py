@@ -87,3 +87,32 @@ def sanitize_competitors_for_prompt(competitors: list[dict]) -> list[dict]:
             "category": sanitize_external_text(c.get("category")),
         })
     return sanitized
+
+
+def sanitize_competition_table(table: dict | None) -> dict | None:
+    """
+    Sanitise la competition_table pré-calculée (Sprint 12) avant prompt.
+    Structure : {directs: [...], indirects: [...], count_direct, count_total, avg_rating}
+    Chaque ligne : {name, domain, rating, stars, reviews, source_id}.
+    name vient de Places (externe) ; domain vient du classifier (dérivé d'externe).
+    Les nombres et les étoiles pré-calculées sont laissés tels quels.
+    """
+    if not table or not isinstance(table, dict):
+        return table
+
+    def _clean_rows(rows: list) -> list:
+        out = []
+        for r in rows or []:
+            if isinstance(r, dict):
+                out.append({
+                    **r,
+                    "name": sanitize_external_text(r.get("name")),
+                    "domain": sanitize_external_text(r.get("domain")) or "n.d.",
+                })
+        return out
+
+    return {
+        **table,
+        "directs": _clean_rows(table.get("directs")),
+        "indirects": _clean_rows(table.get("indirects")),
+    }

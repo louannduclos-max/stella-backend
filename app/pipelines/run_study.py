@@ -96,10 +96,18 @@ class StudyPipeline:
                     scale_rows=scale_data["scale"],
                     participation=scale_data["participation"],
                 )
-            # market_sizing est exposé dans le manifest via master_json_builder
-            study._market_sizing = market_sizing_engine.estimate(study)  # type: ignore[attr-defined]
         except Exception:
             pass  # pays sans barème défini → pas de slide financement, pas d'invention
+        # Market sizing — try/except SÉPARÉ du funding_scale : un échec ici ne doit
+        # pas masquer l'autre, et on loggue au lieu d'avaler silencieusement.
+        try:
+            from app.services.market_sizing_engine import market_sizing_engine
+            study.market_sizing = market_sizing_engine.estimate(study)
+        except Exception as exc:
+            import logging
+            logging.getLogger(__name__).warning(
+                "[market_sizing] estimation impossible : %s", exc
+            )
         study.sections = [self._build_section_shell(item, metrics) for item in SECTION_REGISTRY]
         _emit(study_id, phase=3, progress=50, eta=90)
 

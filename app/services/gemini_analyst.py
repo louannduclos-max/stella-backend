@@ -108,7 +108,16 @@ def _template_narratives(study: "Study") -> dict:
     services_fr = ", ".join(
         _SERVICE_LABELS_FR.get(s, s) for s in raw_services
     ) or "services à domicile"
-    verdict_key = str(study.verdict or "go_conditional")
+    # Fix Sprint 13 — normalisation du verdict : str(VerdictEnum.NO_GO) donne
+    # "NO_GO" (voire "VerdictEnum.NO_GO" selon la version Python), jamais les
+    # clés minuscules du mapping → le fallback disait toujours "conditionnel"
+    # et l'exec_summary tombait dans la branche "insuffisantes" même pour un GO.
+    _v = study.verdict
+    verdict_key = (
+        (_v.value if hasattr(_v, "value") else str(_v or "GO_CONDITIONAL"))
+        .rsplit(".", 1)[-1]
+        .lower()
+    )
     verdict_fr = _VERDICT_LABELS_FR.get(verdict_key, "conditionnel")
 
     # Scores triés par valeur décroissante pour identifier les points forts

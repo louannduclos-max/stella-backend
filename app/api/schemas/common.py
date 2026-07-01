@@ -190,5 +190,9 @@ class Study(BaseModel):
     # Data-Depth sprint — acteurs nommés + barème financement
     competitors: list[Competitor] = Field(default_factory=list)
     funding_scale: FundingScale | None = None
+    # Sprint 13 — marché adressable estimé (market_sizing_engine). Champ déclaré :
+    # l'ancien attribut dynamique `_market_sizing` levait ValueError sur Pydantic v2
+    # (avalé par try/except) → market_sizing toujours null dans le manifest.
+    market_sizing: dict | None = None
     created_at: datetime
     updated_at: datetime

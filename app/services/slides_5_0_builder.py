@@ -171,7 +171,10 @@ def _prepare_section_data(study: Study, section_id: str, manifest: dict) -> dict
     competition_avg_rating) sont pre-calculees par slide_precompute.py et presentes
     dans le manifest. L'agent les recopie, il ne calcule rien.
     """
-    from app.agents.sanitize import sanitize_competitors_for_prompt
+    from app.agents.sanitize import (
+        sanitize_competition_table,
+        sanitize_competitors_for_prompt,
+    )
 
     base = {
         "zone": study.geo_scope.city or "",
@@ -183,6 +186,12 @@ def _prepare_section_data(study: Study, section_id: str, manifest: dict) -> dict
     if section_id == "competition" or section_id == "competition_mapping":
         return {
             **base,
+            # Sprint 13 — competition_table transmise au prompt. Sprint 12 avait mis
+            # à jour SECTION_DATA_KEYS mais PAS ce chemin de prod : sans cette clé,
+            # le skill n'a jamais les domaines/badges Direct à recopier.
+            "competition_table": sanitize_competition_table(
+                manifest.get("competition_table")
+            ),
             "competitors_top": sanitize_competitors_for_prompt(
                 manifest.get("competitors_top", [])
             ),
@@ -215,10 +224,15 @@ def _prepare_section_data(study: Study, section_id: str, manifest: dict) -> dict
 
     if section_id == "demographics":
         # demographics_pie contient le complement pre-calcule — l'agent recopie
+        # Fix Sprint 13 : manifest["metrics"] est un dict {count, items, by_id} —
+        # l'ancien manifest.get("metrics", [])[:8] levait TypeError (slice sur dict)
+        # → la slide demographics partait TOUJOURS en fallback en prod.
+        _metrics_obj = manifest.get("metrics") or {}
+        _metric_items = _metrics_obj.get("items", []) if isinstance(_metrics_obj, dict) else _metrics_obj
         return {
             **base,
             "demographics_pie": manifest.get("demographics_pie"),
-            "metrics": manifest.get("metrics", [])[:8],
+            "metrics": _metric_items[:8],
         }
 
     if section_id == "verdict":
