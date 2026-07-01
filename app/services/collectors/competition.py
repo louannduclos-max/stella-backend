@@ -5,7 +5,12 @@ from app.core.enums import ConfidenceGrade, FreshnessLevel, GeoLevel, SourceType
 from app.core.score_config import DEFAULT_METRIC_BASELINES
 from app.services.collectors.base import BaseCollector
 from app.services.external.geo_api_gouv import geo_api_gouv
-from app.services.external.google_places_api import classify_competitors, google_places
+from app.services.external.google_places_api import (
+    USE_NEW_PLACES_API,
+    classify_competitors,
+    google_places,
+    google_places_new,
+)
 from app.services.external.ine_geo import ine_geo
 
 
@@ -24,7 +29,8 @@ class CompetitionCollector(BaseCollector):
             return [], []
 
         lat, lon = self._resolve_coords(study)
-        live15, live30, classification15 = self._fetch_live(country, lat, lon)
+        city = study.geo_scope.city or ""
+        live15, live30, classification15 = self._fetch_live(country, lat, lon, city=city)
 
         src = self._new_source(
             country=country,
@@ -127,13 +133,28 @@ class CompetitionCollector(BaseCollector):
                     return None, None
         return None, None
 
-    def _fetch_live(self, country: str, lat: float | None, lon: float | None):
-        if not google_places.is_configured() or lat is None or lon is None:
-            return None, None, {}
-        places15 = google_places.search_competitors(lat, lon, country, RADIUS_15MIN_M)
-        places30 = google_places.search_competitors(lat, lon, country, RADIUS_30MIN_M)
-        classification = classify_competitors(places15)
-        return places15, places30, classification
+    def _fetch_live(self, country: str, lat: float | None, lon: float | None, city: str = ""):
+        """
+        Fetch live Places data. Bascule sur New Places API si USE_NEW_PLACES_API=true.
+        Activer via : GOOGLE_PLACES_API_NEW=true sur Render (après probe A.1 OK).
+        """
+        if USE_NEW_PLACES_API:
+            # New Places API — requêtes textuelles, pagination avec sleep(3)
+            if not google_places_new.is_configured() or not city:
+                return None, None, {}
+            places15 = google_places_new.collect_competitors(city, country)
+            # Pour la New API, on n'a pas de rayon → count_30 = count_15 (estimation)
+            places30 = places15
+            classification = classify_competitors(places15)
+            return places15, places30, classification
+        else:
+            # Legacy Nearby Search (défaut — actif tant que probe non confirmé)
+            if not google_places.is_configured() or lat is None or lon is None:
+                return None, None, {}
+            places15 = google_places.search_competitors(lat, lon, country, RADIUS_15MIN_M)
+            places30 = google_places.search_competitors(lat, lon, country, RADIUS_30MIN_M)
+            classification = classify_competitors(places15)
+            return places15, places30, classification
 
 
 def build_competitors_from_places(

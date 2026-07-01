@@ -2,16 +2,27 @@
 Slides 5.0 builder — chemin unique et propre.
 
 Architecture Sprint 5 :
-  layout_engine_5_0 (déterministe, source de vérité positions)
-    → validate_slide_objects (schéma unique, rejette les malformés)
-    → [optionnel] NarrativeAgent.fill_text_slots (enrichit les slots texte)
-    → [optionnel] QAAgent.validate_and_merge (revert slot par slot si échec)
+  layout_engine_5_0 (deterministique, source de verite positions)
+    -> validate_slide_objects (schema unique, rejette les malformes)
+    -> [optionnel] NarrativeAgent.fill_text_slots (enrichit les slots texte)
+    -> [optionnel] QAAgent.validate_and_merge (revert slot par slot si echec)
+
+Sprint 9 — Chemin B HTML generatif (USE_HTML_SLIDE_AGENT=true) :
+  ThreadPoolExecutor parallelise les appels Gemini (sync-safe, pas asyncio)
+  Circuit breaker partage par etude : 3 echecs -> bascule tout en deterministique
+  Cache Supabase (slide_cache.py) : 0 appel Gemini si section_data identique
+  Le deterministique PPTX reste le fallback garanti pour chaque slide
+
+INVARIANT : le pipeline produit TOUJOURS 15 slides, meme si Gemini tombe.
+  html_content=None -> renderer frontend utilise le PPTX deterministique.
 
 slide_builder_agent (Vertex AI / Sprint 2) n'est PLUS dans le chemin actif.
-Le fichier est conservé dans le repo mais ne doit pas être appelé ici.
+Le fichier est conserve dans le repo mais ne doit pas etre appele ici.
 """
 import logging
 import os
+import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, Dict, List
 
 from app.api.schemas.common import Study
@@ -25,18 +36,63 @@ from app.services.slide_data_builder_5_0 import build_slide_data_5_0, collect_ex
 logger = logging.getLogger(__name__)
 
 USE_NARRATIVE_AGENT = os.environ.get("SLIDE_BUILDER_USE_AGENT", "false").lower() == "true"
+USE_HTML_AGENT = os.environ.get("USE_HTML_SLIDE_AGENT", "false").lower() == "true"
+_MAX_PARALLEL = int(os.environ.get("HTML_AGENT_PARALLELISM", "5"))
 
-FALLBACK = "Donnée non disponible (TBD)"
+FALLBACK = "Donnee non disponible (TBD)"
 
-# Sections structurelles toujours incluses même si données manquantes
+
+# -----------------------------------------------------------------------------
+# Circuit breaker — partage par etude, thread-safe (faille v2 corrigee)
+# -----------------------------------------------------------------------------
+# En v2, le breaker etait local a chaque appel => jamais declenche.
+# Ici il vit le temps d'une generation et est partage entre les threads du pool.
+# 3 echecs Gemini consecutifs => is_open=True => toutes les slides restantes
+# basculent en deterministique sans attendre N*timeout.
+
+class _Breaker:
+    def __init__(self, threshold: int = 3):
+        self.failures = 0
+        self.threshold = threshold
+        self.lock = threading.Lock()
+
+    def record_failure(self) -> None:
+        with self.lock:
+            self.failures += 1
+
+    def record_success(self) -> None:
+        with self.lock:
+            self.failures = 0
+
+    @property
+    def is_open(self) -> bool:
+        return self.failures >= self.threshold
+
+
+_breakers: dict[str, _Breaker] = {}
+_breakers_lock = threading.Lock()
+
+
+def _get_breaker(study_id: str) -> _Breaker:
+    with _breakers_lock:
+        if study_id not in _breakers:
+            _breakers[study_id] = _Breaker()
+        return _breakers[study_id]
+
+
+# Sections structurelles toujours incluses meme si donnees manquantes
 _ALWAYS_INCLUDE = {"cover", "executive_summary", "swot", "verdict"}
 
 
+# -----------------------------------------------------------------------------
+# Helpers
+# -----------------------------------------------------------------------------
+
 def _is_slide_data_empty(slide_data: Dict[str, Any]) -> bool:
     """
-    Retourne True si TOUS les slots de données primaires d'un slide
-    sont à la valeur FALLBACK. Les champs statiques (title/eyebrow)
-    ne sont pas comptés.
+    Retourne True si TOUS les slots de donnees primaires d'un slide
+    sont a la valeur FALLBACK. Les champs statiques (title/eyebrow)
+    ne sont pas comptes.
     """
     for key in ("metrics", "columns", "steps", "hero_kpis", "quadrants"):
         items = slide_data.get(key)
@@ -53,8 +109,8 @@ def _is_slide_data_empty(slide_data: Dict[str, Any]) -> bool:
 
 def _resolve_brand_slug(study: Study) -> str | None:
     """
-    Résout le slug de marque depuis tenant_id ou brand_name.
-    Priorité : brand_name (ex: "o2") > tenant_id (ex: "interdomicilio") > None.
+    Resout le slug de marque depuis tenant_id ou brand_name.
+    Priorite : brand_name (ex: "o2") > tenant_id (ex: "interdomicilio") > None.
     """
     from app.core.brand_profiles import get_brand_profile
 
@@ -68,11 +124,164 @@ def _resolve_brand_slug(study: Study) -> str | None:
     return study.tenant_id or None
 
 
+# -----------------------------------------------------------------------------
+# Preparation des donnees section -> prompt (Sprint 9 — Chemin B)
+# -----------------------------------------------------------------------------
+
+def _prepare_section_data(study: Study, section_id: str, manifest: dict) -> dict:
+    """
+    Extrait du manifest uniquement les donnees pertinentes pour la section.
+    Les noms externes (Places) sont sanitises avant d'entrer dans le prompt Gemini.
+    Ne jamais passer le manifest complet au LLM (limite tokens + risque d'invention).
+    """
+    from app.agents.sanitize import sanitize_competitors_for_prompt
+
+    base = {
+        "zone": study.geo_scope.city or "",
+        "brand_name": study.business_context.brand_name or "",
+        "year": "2026",
+        "language": study.language or "fr",
+    }
+
+    if section_id == "competition":
+        return {
+            **base,
+            "competitors_top": sanitize_competitors_for_prompt(
+                manifest.get("competitors_top", [])
+            ),
+            "competitors_total_count": manifest.get("competitors_total_count", 0),
+        }
+
+    if section_id == "executive_summary":
+        return {
+            **base,
+            "market_sizing": manifest.get("market_sizing", {}),
+            "funding_scale": manifest.get("funding_scale", {}),
+            "verdict": manifest.get("verdict"),
+        }
+
+    if section_id == "benchmark_comparison":
+        return {
+            **base,
+            "metrics": [
+                m for m in (manifest.get("metrics", []) or [])
+                if m.get("national_benchmark") is not None
+            ][:10],
+        }
+
+    if section_id == "funding_feasibility":
+        return {
+            **base,
+            "funding_scale": manifest.get("funding_scale", {}),
+            "market_sizing": manifest.get("market_sizing", {}),
+        }
+
+    return {
+        **base,
+        "metrics": manifest.get("metrics", [])[:8],
+    }
+
+
+# -----------------------------------------------------------------------------
+# Generation HTML d'une slide (Sprint 9 — Chemin B, thread-safe)
+# -----------------------------------------------------------------------------
+
+def _generate_one_html(
+    section: dict,
+    section_idx: int,
+    study: Study,
+    manifest: dict,
+    breaker: _Breaker,
+) -> str | None:
+    """
+    Genere le HTML complet d'une slide via HTMLSlideAgent.
+    Retourne None en cas d'echec -> la slide sera servie en deterministique (PPTX).
+
+    Integre :
+    - Circuit breaker : si is_open -> bypass immediat (economie timeout)
+    - Cache Supabase : si section_data identique -> 0 appel Gemini
+    - QA deterministique : si nombres non traces -> None (pas de HTML invente)
+    """
+    if breaker.is_open:
+        logger.info("[slides_builder] breaker ouvert -> fallback %s", section["section_id"])
+        return None
+
+    try:
+        from app.agents.html_slide_agent import html_slide_agent
+        from app.agents.qa_html_agent import validate_html
+        from app.services.slide_cache import cache_get, cache_set, slide_cache_key
+
+        section_id = section["section_id"]
+        brand = study.tenant_id or "interdomicilio"
+        language = (study.language or "fr")[:2]
+
+        section_data = _prepare_section_data(study, section_id, manifest)
+
+        # Lookup cache avant Gemini
+        cache_key = slide_cache_key(section_id, section_data)
+        cached = cache_get(cache_key)
+        if cached:
+            breaker.record_success()
+            return cached
+
+        # Generation Gemini
+        main = html_slide_agent.generate_main_content(
+            section_id=section_id,
+            section_number=section_idx,
+            section_data=section_data,
+            brand=brand,
+            language=language,
+        )
+        if not main:
+            breaker.record_failure()
+            return None
+
+        # QA deterministique
+        ok, issues = validate_html(main, manifest)
+        if not ok:
+            logger.info(
+                "[slides_builder] QA FAIL %s — %d issues : %s",
+                section_id, len(issues), issues[:3],
+            )
+            breaker.record_failure()
+            return None
+
+        # Assemblage HTML complet
+        full_html = html_slide_agent.assemble_slide(
+            section_id=section_id,
+            section_number=section_idx,
+            section_title=section.get("display_name", section_id),
+            section_subtitle="Marche " + (study.geo_scope.city or ""),
+            main_content=main,
+            brand=brand,
+            language=language,
+            zone=study.geo_scope.city or "",
+            year="2026",
+        )
+
+        # Mise en cache
+        cache_set(cache_key, full_html)
+        breaker.record_success()
+        return full_html
+
+    except Exception as exc:
+        logger.warning(
+            "[slides_builder] _generate_one_html KO %s -> fallback : %s",
+            section.get("section_id"), exc,
+        )
+        breaker.record_failure()
+        return None
+
+
+# -----------------------------------------------------------------------------
+# Pipeline principal
+# -----------------------------------------------------------------------------
+
 def build_slides_5_0_for_study(study: Study) -> Dict[str, Any]:
     slides: List[Dict[str, Any]] = []
     skipped: List[str] = []
 
-    # Manifest — source de vérité pour l'agent et le QA
+    # Manifest — source de verite pour l'agent et le QA
     manifest = master_json_builder.build(study)
 
     # Import optionnel de NarrativeAgent (silencieux si indispo)
@@ -85,7 +294,7 @@ def build_slides_5_0_for_study(study: Study) -> Dict[str, Any]:
         except Exception as _e:
             logger.warning("[slides_builder] NarrativeAgent non disponible : %s", _e)
 
-    # Import optionnel de QAAgent (toujours dispo car déterministe, mais gardons la défense)
+    # Import optionnel de QAAgent
     _qa_agent = None
     if USE_NARRATIVE_AGENT:
         try:
@@ -95,24 +304,51 @@ def build_slides_5_0_for_study(study: Study) -> Dict[str, Any]:
             logger.warning("[slides_builder] QAAgent non disponible : %s", _e)
 
     if not USE_NARRATIVE_AGENT:
-        logger.info("[slides_builder] Mode déterministe pur (SLIDE_BUILDER_USE_AGENT=false)")
+        logger.info("[slides_builder] Mode deterministique pur (SLIDE_BUILDER_USE_AGENT=false)")
+
+    # -- Chemin B : generation HTML en parallele (USE_HTML_SLIDE_AGENT=true) --
+    # IMPORTANT : ne pas utiliser asyncio (pipeline sync). ThreadPoolExecutor
+    # seul est compatible. Le deterministique PPTX est TOUJOURS construit en fallback.
+    html_by_section: dict[str, str | None] = {}
+    if USE_HTML_AGENT:
+        breaker = _get_breaker(study.study_id)
+        logger.info(
+            "[slides_builder] Chemin B HTML actif (parallelism=%d)", _MAX_PARALLEL
+        )
+        with ThreadPoolExecutor(max_workers=_MAX_PARALLEL) as executor:
+            futures = {
+                executor.submit(
+                    _generate_one_html, section, idx, study, manifest, breaker
+                ): section["section_id"]
+                for idx, section in enumerate(SECTION_REGISTRY, start=1)
+            }
+            for future in as_completed(futures):
+                sid = futures[future]
+                try:
+                    html_by_section[sid] = future.result()
+                except Exception as exc:
+                    logger.warning(
+                        "[slides_builder] future KO %s : %s", sid, exc
+                    )
+                    html_by_section[sid] = None
+    # -- Fin Chemin B ---------------------------------------------------------
 
     for idx, section in enumerate(SECTION_REGISTRY, start=1):
         section_id = section["section_id"]
         display_name = section.get("display_name", section_id)
         expected_kpis = section.get("expected_kpis") or []
 
-        # 1. Build données + layout déterministe — TOUJOURS, jamais bypass
+        # 1. Build donnees + layout deterministique — TOUJOURS, jamais bypass
         slide_data = build_slide_data_5_0(study, section_id, expected_kpis, display_name=display_name)
 
-        # Filtrage des slides sans données (sauf sections structurelles)
+        # Filtrage des slides sans donnees (sauf sections structurelles)
         if section_id not in _ALWAYS_INCLUDE and _is_slide_data_empty(slide_data):
             skipped.append(section_id)
             continue
 
         layout = build_slide_5_0(section_id, slide_data)
 
-        # 2. Validation schéma unique — rejette les objets malformés ou hors canvas
+        # 2. Validation schema unique — rejette les objets malformes ou hors canvas
         objects = validate_slide_objects(layout["objects"])
 
         # 3. Enrichissement narratif optionnel + QA slot par slot
@@ -130,8 +366,10 @@ def build_slides_5_0_for_study(study: Study) -> Dict[str, Any]:
                 else:
                     objects = enriched
             except Exception as e:
-                logger.warning("[slides_builder] NarrativeAgent KO sur '%s' → fallback déterministe : %s", section_id, e)
-                # objects reste la version déterministe validée — jamais d'échec visible
+                logger.warning(
+                    "[slides_builder] NarrativeAgent KO sur '%s' -> fallback deterministique : %s",
+                    section_id, e,
+                )
 
         slides.append({
             "slide_index": idx,
@@ -149,6 +387,9 @@ def build_slides_5_0_for_study(study: Study) -> Dict[str, Any]:
             "objects": objects,
             "expected_strings": collect_expected_strings(slide_data),
             "agent_generated": _narrative_agent is not None,
+            # html_content=None si USE_HTML_AGENT=false ou si QA a echoue
+            # -> le renderer frontend utilise le PPTX deterministique (fallback garanti)
+            "html_content": html_by_section.get(section_id) if USE_HTML_AGENT else None,
         })
 
     brand_slug = _resolve_brand_slug(study)
@@ -163,11 +404,12 @@ def build_slides_5_0_for_study(study: Study) -> Dict[str, Any]:
         "css_vars": css_vars,
         "slides": slides,
         "skipped_sections": skipped,
+        "use_html": USE_HTML_AGENT,
     }
 
 
 def get_slide_5_0(payload: Dict[str, Any], slide_id: str) -> Dict[str, Any] | None:
-    """Récupère un slide par son slide_id dans le payload slides_5_0."""
+    """Recupere un slide par son slide_id dans le payload slides_5_0."""
     for slide in payload.get("slides", []):
         if slide.get("slide_id") == slide_id:
             return slide

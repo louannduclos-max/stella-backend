@@ -292,74 +292,99 @@ def preview_slide_agent(
 
 
 # ---------------------------------------------------------------------------
-# 6. Debug — Google Places Probe
+# 6. Debug — Google Places Probe (Sprint 9 — dual-API diagnostic)
 # ---------------------------------------------------------------------------
 
 @router.get("/debug/places-probe")
 def debug_places_probe(
-    city: str = "Auray",
-    lat: float = 47.6667,
-    lng: float = -2.9833,
-    radius: int = 15000,
+    query: str = "aide à domicile Bordeaux",
 ) -> dict:
     """
-    Endpoint de diagnostic temporaire — teste Google Places Nearby Search directement.
-    Appeler : GET /agents/debug/places-probe?city=Auray
-    Interpréter le statut :
-    - REQUEST_DENIED → clé non autorisée sur Places API
-    - OK count=0     → radius trop petit ou mots-clés inadaptés
-    - OK count=N     → bug dans le collector, pas dans l'API
+    Diagnostic dual-API Google Places — teste Legacy textsearch ET New API.
+
+    Appeler : GET /agents/debug/places-probe?query=aide+à+domicile+Bordeaux
+
+    Interprétation :
+    - new.count > 0, legacy en erreur  → migrer sur New API (cas attendu)
+    - legacy.count > 0                 → garder Legacy, bug ailleurs (keyword/radius)
+    - Les deux REQUEST_DENIED          → clé non activée pour Places API (New)
+                                          ou clé restreinte par référent HTTP
+
+    Décision après résultat :
+      new.count > 0 → implémenter A.2 (collector New API)
+      legacy.count > 0 → ajuster SAP_KEYWORDS_FR et radius dans google_places_api.py
     """
     import os
     import httpx
 
     key = os.environ.get("GOOGLE_PLACES_API_KEY", "")
     if not key:
-        return {"error": "GOOGLE_PLACES_API_KEY absent de l'env Render"}
+        return {"error": "GOOGLE_PLACES_API_KEY absente de l'env Render"}
 
-    keywords = [
-        "aide à domicile",
-        "aide aux personnes âgées",
-        "aide aux seniors",
-        "services à domicile",
-        "Interdomicilio",
-        "Azaé",
-        "O2 Care Services",
-        "Vitalliance",
-        "senior",
-    ]
-    results = {}
-    for kw in keywords:
-        try:
-            r = httpx.get(
-                "https://maps.googleapis.com/maps/api/place/nearbysearch/json",
-                params={
-                    "location": f"{lat},{lng}",
-                    "radius": radius,
-                    "keyword": kw,
-                    "key": key,
-                },
-                timeout=10,
-            )
-            data = r.json()
-            results[kw] = {
-                "status": data.get("status"),
-                "count": len(data.get("results", [])),
-                "error_message": data.get("error_message"),
-                "names": [p["name"] for p in data.get("results", [])[:3]],
-            }
-        except Exception as e:
-            results[kw] = {"status": "EXCEPTION", "error": str(e)}
+    out: dict = {}
 
-    total = sum(r.get("count", 0) for r in results.values() if isinstance(r.get("count"), int))
+    # --- Legacy Text Search ---
+    try:
+        r = httpx.get(
+            "https://maps.googleapis.com/maps/api/place/textsearch/json",
+            params={"query": query, "key": key},
+            timeout=10,
+        )
+        d = r.json()
+        out["legacy_textsearch"] = {
+            "http": r.status_code,
+            "status": d.get("status"),
+            "count": len(d.get("results", [])),
+            "error": d.get("error_message"),
+            "names": [p["name"] for p in d.get("results", [])[:5]],
+        }
+    except Exception as e:
+        out["legacy_textsearch"] = {"exception": str(e)}
+
+    # --- New Places API (Places API (New)) ---
+    try:
+        r = httpx.post(
+            "https://places.googleapis.com/v1/places:searchText",
+            headers={
+                "Content-Type": "application/json",
+                "X-Goog-Api-Key": key,
+                "X-Goog-FieldMask": (
+                    "places.displayName,places.formattedAddress,"
+                    "places.rating,places.userRatingCount,places.types"
+                ),
+            },
+            json={"textQuery": query, "languageCode": "fr"},
+            timeout=10,
+        )
+        d = r.json()
+        out["new_places_api"] = {
+            "http": r.status_code,
+            "count": len(d.get("places", [])),
+            "error": d.get("error", {}).get("message"),
+            "names": [
+                p.get("displayName", {}).get("text", "?")
+                for p in d.get("places", [])[:5]
+            ],
+        }
+    except Exception as e:
+        out["new_places_api"] = {"exception": str(e)}
+
+    # --- Recommandation automatique ---
+    new_ok = out.get("new_places_api", {}).get("count", 0) > 0
+    legacy_ok = out.get("legacy_textsearch", {}).get("count", 0) > 0
+    if new_ok:
+        recommendation = "NEW_API_OK → implémenter A.2 (New Places API collector)"
+    elif legacy_ok:
+        recommendation = "LEGACY_OK → bug dans collector (keyword/radius), pas dans l'API"
+    else:
+        recommendation = "BOTH_FAIL → vérifier activation 'Places API (New)' dans Google Cloud Console"
+
     return {
-        "city": city,
-        "coords": {"lat": lat, "lng": lng},
-        "radius_m": radius,
+        "query": query,
         "key_present": bool(key),
         "key_prefix": key[:8] + "..." if key else "",
-        "total_results": total,
-        "by_keyword": results,
+        "recommendation": recommendation,
+        "results": out,
     }
 
 
@@ -391,6 +416,7 @@ def debug_html_slide(
     from app.repositories.studies_repo import studies_repo
     from app.agents.html_slide_agent import html_slide_agent
     from app.agents.qa_html_agent import validate_html
+    from app.agents.sanitize import sanitize_competitors_for_prompt
     from app.services.master_json_builder import master_json_builder
 
     study = studies_repo.get(study_id)
@@ -401,10 +427,13 @@ def debug_html_slide(
 
     # Données passées au LLM : uniquement ce dont la slide a besoin
     # (pas tout le manifest, pour limiter tokens et risque d'invention)
+    # Les noms Places sont sanitisés (B — injection de prompt)
     section_data: dict = {}
     if section_id == "competition":
         section_data = {
-            "competitors_top": manifest.get("competitors_top", []),
+            "competitors_top": sanitize_competitors_for_prompt(
+                manifest.get("competitors_top", [])
+            ),
             "competitors_total_count": manifest.get("competitors_total_count", 0),
             "zone": study.geo_scope.city or "",
             "brand_name": study.business_context.brand_name or "",
@@ -431,7 +460,7 @@ def debug_html_slide(
             "study_id": study_id,
         }
 
-    qa_ok, untraceable = validate_html(main_content, manifest)
+    qa_ok, issues = validate_html(main_content, manifest)
 
     full_html = html_slide_agent.assemble_slide(
         section_id=section_id,
@@ -451,13 +480,13 @@ def debug_html_slide(
         return FastAPIResponse(content=full_html, media_type="text/html")
     else:
         logger.warning(
-            "[debug/html-slide] QA FAIL — %d nombres non tracés : %s",
-            len(untraceable), untraceable[:5],
+            "[debug/html-slide] QA FAIL — %d issues : %s",
+            len(issues), issues[:5],
         )
         return {
             "qa_failed": True,
-            "untraceable_count": len(untraceable),
-            "untraceable_numbers": untraceable[:20],
+            "issue_count": len(issues),
+            "issues": issues[:20],
             "html": full_html,
         }
 
@@ -486,7 +515,6 @@ def submit_visual_qa_report(report: VisualQAReport) -> AgentResponse:
     )
 
     if report.overall_status == "fail" or len(errors) > 0:
-        # En Phase 2 : mettre à jour study.status = "qa_failed"
         return _make_response(
             "accepted",
             f"Rapport QA enregistré — {len(errors)} erreur(s) bloquante(s), statut=fail (re-génération à planifier)",
@@ -496,5 +524,8 @@ def submit_visual_qa_report(report: VisualQAReport) -> AgentResponse:
     return _make_response(
         "accepted",
         f"Rapport QA enregistré — {len(warnings)} avertissement(s), statut={report.overall_status}",
+        report.model_dump(),
+    )
+ QA enregistré — {len(warnings)} avertissement(s), statut={report.overall_status}",
         report.model_dump(),
     )

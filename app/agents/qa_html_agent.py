@@ -1,24 +1,24 @@
 """
-QA HTML déterministe — vérifie que chaque nombre visible dans le HTML
-est traçable dans le manifest.
+QA HTML déterministe — Sprint 9 v3 (renforcé).
 
-Sprint 8 — Chemin B.
+Sprint 8 v2 : vérifiait uniquement les nombres dans le texte visible.
+Sprint 9 v3 : ferme 3 failles supplémentaires :
+  1. Données Chart.js dans les blocs <script> (ex: data: [45321, 12000])
+     → un graphique pouvait afficher des valeurs sans traçabilité
+  2. Détection heuristique des affirmations qualitatives fausses
+     (superlatifs non sourcés : "le plus grand", "leader du marché", etc.)
+  3. Cohérence du manifest avec default=str pour les dates Python
 
-Principe :
-  - Extraire tous les nombres "significatifs" du HTML (≥ 2 chiffres, pas CSS px/%)
-  - Sérialiser le manifest en texte plat
-  - Vérifier que chaque nombre trouvé dans le HTML existe dans le manifest
-  - Les nombres purement CSS (100px, 80%, 1px, etc.) sont ignorés
-  - Les constantes de mise en page (années ≥ 2020 à confirmer, numéros de page, etc.)
-    sont acceptées sans traçabilité stricte
+HONNÊTETÉ SUR LES LIMITES :
+  Ce QA est heuristique — il réduit le risque d'hallucination, il ne l'annule pas.
+  La vraie garantie reste : (a) prompt strict avec source_of_truth explicite,
+  (b) température basse (0.4), (c) le fallback déterministe PPTX toujours présent.
+  Ne pas présenter ce QA comme une preuve absolue dans les handoffs.
 
-Retourne (ok: bool, untraceable: list[str])
-  - ok=True si tous les nombres sont tracés
-  - untraceable : liste des nombres suspects avec contexte
-
-IMPORTANT : Ce QA est conservateur — il doit avoir peu de faux positifs.
-Un nombre "non tracé" bloque l'affichage. Les constantes connues (années,
-numéros de section) sont whitelistées.
+API publique :
+  validate_html(html: str, manifest: dict) -> tuple[bool, list[str]]
+    ok=True si aucun problème détecté
+    issues : liste des problèmes avec catégorie préfixée (texte:, chart:, claim:)
 """
 from __future__ import annotations
 
@@ -27,74 +27,140 @@ import re
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Extraction des nombres depuis le HTML
+# Normalisation des nombres
 # ─────────────────────────────────────────────────────────────────────────────
 
-# Pattern : chiffres (avec séparateurs espace/apostrophe/virgule) ≥ 2 chiffres consécutifs
-_NUMBER_PATTERN = re.compile(r"\b(\d[\d\s ',\.]*\d)\b")
-
-# Valeurs CSS à ignorer : suivi de px, %, em, rem, vh, vw, pt, s, ms
-_CSS_UNIT_SUFFIX = re.compile(r"\d+(?:\.\d+)?\s*(?:px|%|em|rem|vh|vw|pt|ms|s)\b", re.IGNORECASE)
-
-# Whitelist : numéros de section (1-20), années (2020-2030)
-_WHITELISTED = set(str(n) for n in range(1, 21)) | set(str(y) for y in range(2020, 2031))
-
-# Tags HTML à ignorer pour l'extraction (style, script, commentaires)
-_STRIP_TAGS = re.compile(r"<style[^>]*>.*?</style>|<script[^>]*>.*?</script>|<!--.*?-->", re.DOTALL)
-_STRIP_HTML_TAGS = re.compile(r"<[^>]+>")
-
-
-def _extract_visible_numbers(html: str) -> list[tuple[str, str]]:
+def _numbers(text: str) -> list[str]:
     """
-    Retourne une liste de (nombre_normalisé, contexte) pour chaque nombre
-    significatif trouvé dans le texte visible du HTML.
+    Extrait les nombres significatifs d'un texte, après avoir retiré
+    les valeurs CSS (px, em, %, etc.) qui ne sont pas des données.
+    Retourne des chaînes brutes (avec éventuels séparateurs).
     """
-    # Supprimer style, script, commentaires
-    text = _STRIP_TAGS.sub(" ", html)
-    # Supprimer les balises HTML restantes
-    text = _STRIP_HTML_TAGS.sub(" ", text)
-    # Supprimer les valeurs CSS dans les attributs style inline
-    text = _CSS_UNIT_SUFFIX.sub(" ", text)
+    # Retire d'abord les valeurs CSS numériques pour éviter les faux positifs
+    text = re.sub(r"\d+(\.\d+)?(px|em|rem|%|vh|vw|pt|s|ms|deg)\b", " ", text)
+    return re.findall(r"\d[\d\s.,]*\d|\d+", text)
 
-    results = []
-    for m in _NUMBER_PATTERN.finditer(text):
-        raw = m.group(1)
-        # Normaliser : supprimer séparateurs d'espacement
-        normalized = re.sub(r"[\s ',]", "", raw)
-        if len(normalized) < 2:
+
+def _normalize(n: str) -> str:
+    """Normalise un nombre : retire séparateurs d'espace/virgule/point pour comparaison."""
+    return re.sub(r"[\s,.]", "", n)
+
+
+def _manifest_index(manifest: dict) -> str:
+    """
+    Sérialise le manifest en index texte plat pour la recherche de nombres.
+    default=str gère les date/datetime Python non sérialisables (Sprint 8 fix).
+    On normalise aussi : retire séparateurs pour comparaison uniforme.
+    """
+    raw = json.dumps(manifest, ensure_ascii=False, default=str)
+    return re.sub(r"[\s,]", "", raw).replace(".", "")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Extraction depuis le HTML texte visible (hors <script>/<style>)
+# ─────────────────────────────────────────────────────────────────────────────
+
+_STRIP_SCRIPT_STYLE = re.compile(
+    r"<(script|style)[^>]*>[\s\S]*?</\1>", re.IGNORECASE
+)
+_STRIP_COMMENTS = re.compile(r"<!--[\s\S]*?-->")
+_STRIP_TAGS = re.compile(r"<[^>]+>")
+
+# Années et numéros de section : toujours whitelistés (pas de données métier)
+_YEAR_PATTERN = re.compile(r"^(19|20)\d{2}$")
+
+
+def _visible_text(html: str) -> str:
+    """Extrait le texte visible du HTML (retire scripts, styles, balises)."""
+    text = _STRIP_SCRIPT_STYLE.sub(" ", html)
+    text = _STRIP_COMMENTS.sub(" ", text)
+    text = _STRIP_TAGS.sub(" ", text)
+    return text
+
+
+def _check_visible_numbers(html: str, idx: str) -> list[str]:
+    """
+    Faille 1 (héritée Sprint 8) : vérifie les nombres dans le texte visible.
+    Retourne les nombres suspects (non tracés dans le manifest).
+    """
+    text = _visible_text(html)
+    issues = []
+    for raw in _numbers(text):
+        clean = _normalize(raw)
+        # Ignore les nombres trop courts (chiffres isolés, indices)
+        if len(clean) < 3:
             continue
-        if normalized in _WHITELISTED:
+        # Whitelist : années
+        if _YEAR_PATTERN.match(clean):
             continue
-        # Contexte : 40 caractères autour du match
-        start = max(0, m.start() - 40)
-        end = min(len(text), m.end() + 40)
-        context = text[start:end].strip().replace("\n", " ")
-        results.append((normalized, context))
-    return results
+        if clean not in idx:
+            issues.append(f"texte:{raw.strip()}")
+    return issues
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Traçabilité dans le manifest
+# Extraction depuis les données Chart.js (faille v2 comblée)
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _manifest_flat_text(manifest: dict) -> str:
-    """Sérialise le manifest en texte plat pour la recherche de nombres.
-    default=str gère les date/datetime non sérialisables."""
-    return json.dumps(manifest, ensure_ascii=False, default=str)
+# Pattern Chart.js : data: [45321, 12000, 890]
+_CHARTJS_DATA = re.compile(r"\bdata\s*:\s*\[([\d\s.,]+)\]")
 
 
-def _is_traceable(number: str, manifest_text: str) -> bool:
+def _check_chartjs_data(html: str, idx: str) -> list[str]:
     """
-    Retourne True si le nombre (sans séparateurs) apparaît dans le manifest.
-    On vérifie aussi la version avec séparateur d'espace (ex: "45 321" → "45321").
+    Faille v2 : les données Chart.js sont dans des blocs <script> → ignorées par
+    le QA v2. Un graphique pouvait afficher des valeurs inventées.
+
+    On extrait tous les tableaux `data: [...]` et on vérifie chaque valeur.
     """
-    if number in manifest_text:
-        return True
-    # Certains nombres peuvent être stockés avec virgule décimale en JSON (float)
-    # ex: "45321" vs "45321.0" → accepter si le début correspond
-    if f'"{number}"' in manifest_text or f": {number}" in manifest_text:
-        return True
-    return False
+    issues = []
+    for arr_match in _CHARTJS_DATA.finditer(html):
+        arr_content = arr_match.group(1)
+        for n in re.findall(r"\d+(?:\.\d+)?", arr_content):
+            clean = _normalize(n)
+            if len(clean) < 3:
+                continue
+            if _YEAR_PATTERN.match(clean):
+                continue
+            if clean not in idx:
+                issues.append(f"chart:{n}")
+    return issues
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Détection d'affirmations non sourcées (faille v2 — heuristique)
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Superlatifs et claims marketing sans source → red flags
+_RED_FLAGS = [
+    r"\ble plus grand\b",
+    r"\ble meilleur\b",
+    r"\bla meilleure\b",
+    r"\bnuméro\s*un\b",
+    r"\bleader du marché\b",
+    r"\bleader\s+incontesté\b",
+    r"\btoujours\b",
+    r"\bgaranti\b",
+    r"\bsans\s+équivalent\b",
+    r"\binégalé\b",
+    r"\bréférence\s+absolue\b",
+]
+
+
+def _check_red_flags(html: str) -> list[str]:
+    """
+    Faille v2 : le QA ne détectait pas les affirmations qualitatives inventées.
+    Heuristique : signale les superlatifs quantitatifs non sourcés par un chiffre.
+
+    Note : best-effort — peut avoir des faux positifs (ex: un nom propre contenant
+    "meilleur"). À calibrer selon les retours terrain.
+    """
+    text = _visible_text(html)
+    issues = []
+    for pat in _RED_FLAGS:
+        if re.search(pat, text, re.IGNORECASE):
+            issues.append(f"claim:{pat}")
+    return issues
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -103,19 +169,23 @@ def _is_traceable(number: str, manifest_text: str) -> bool:
 
 def validate_html(html: str, manifest: dict) -> tuple[bool, list[str]]:
     """
-    Valide que chaque nombre significatif dans le HTML est traçable dans le manifest.
+    Valide que le HTML ne contient aucun nombre non tracé ni affirmation suspecte.
+
+    Vérifie :
+    1. Nombres dans le texte visible (hors CSS)
+    2. Données dans les blocs Chart.js data: [...] (faille v2)
+    3. Superlatifs/claims marketing non sourcés (faille v2)
 
     Returns:
-        (ok, untraceable_list)
-        ok=True si aucun nombre suspect
-        untraceable_list : liste "nombre → contexte" pour debug
+        (ok, issues)
+        ok=True si aucun problème
+        issues : liste préfixée "texte:", "chart:", "claim:" pour debug
     """
-    manifest_text = _manifest_flat_text(manifest)
-    numbers = _extract_visible_numbers(html)
+    idx = _manifest_index(manifest)
 
-    untraceable: list[str] = []
-    for number, context in numbers:
-        if not _is_traceable(number, manifest_text):
-            untraceable.append(f"{number!r} → «{context}»")
+    issues: list[str] = []
+    issues.extend(_check_visible_numbers(html, idx))
+    issues.extend(_check_chartjs_data(html, idx))
+    issues.extend(_check_red_flags(html))
 
-    return len(untraceable) == 0, untraceable
+    return (len(issues) == 0), issues
