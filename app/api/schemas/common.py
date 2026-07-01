@@ -91,6 +91,10 @@ class Score(BaseModel):
     drivers: list[ScoreDriver]
     missing_inputs_count: int = 0
     status: str = "final"
+    # Sprint 13f — phrase d'interprétation déterministe (seuils, pas de LLM).
+    # Consommée par SWOT (bullets) et scorecard. Le champ était référencé par
+    # les .md depuis le Sprint Data-Depth mais n'a jamais existé sur le modèle.
+    interpretation: str | None = None
 
 
 class Citation(BaseModel):

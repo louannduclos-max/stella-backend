@@ -195,6 +195,13 @@ Règles ABSOLUES :
    une phrase générique unique. Si le JSON fournit un texte `narratives.*`
    pertinent, l'utiliser comme base et le compléter — sans introduire de
    nouveau chiffre.
+10. DENSITÉ VERTICALE : la zone utile fait ~630px de haut. Le contenu doit
+   en occuper au moins 85 % SANS JAMAIS LA DÉPASSER (tout dépassement est
+   coupé au rendu). Contenu court → augmente paddings (20-24px), tailles des
+   valeurs (28-32px), marges entre blocs (24-32px). Contenu long → colonnes
+   côte à côte plutôt qu'empilement, tailles réduites, listes tronquées aux
+   maxima des instructions. Une slide aux deux tiers vide OU qui déborde est
+   un ÉCHEC de mise en page.
 """
 
 def _build_prompt(
