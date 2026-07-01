@@ -1,8 +1,10 @@
 from datetime import UTC, datetime
 
-from app.api.schemas.common import Section, Study
+from app.api.schemas.common import FundingScale, Section, Study
 from app.core.enums import StudyStatus
+from app.core.national_benchmarks import benchmarks_are_stale
 from app.repositories.studies_repo import studies_repo
+from app.services.benchmark_engine import benchmark_engine
 from app.services.consolidation_engine import consolidation_engine
 from app.services.microzones_engine import microzones_engine
 from app.services.qa_engine import qa_engine
@@ -69,6 +71,35 @@ class StudyPipeline:
 
         # Phase 3 — Consolidation (progress 50 %)
         study.status = StudyStatus.CONSOLIDATING
+        # Enrichissement benchmark national (déterministe, jamais bloquant)
+        try:
+            study.metrics = benchmark_engine.enrich_metrics(study.metrics, study.country)
+            if benchmarks_are_stale(datetime.now(UTC).year):
+                import logging
+                logging.getLogger(__name__).warning(
+                    "[benchmark] Références nationales périmées (BENCHMARKS_YEAR < %d-1) — à revérifier",
+                    datetime.now(UTC).year,
+                )
+        except Exception:
+            pass  # ne jamais bloquer le pipeline sur un enrichissement
+        # Barème de financement + market sizing
+        try:
+            from app.core.funding_scales import get_funding_scale
+            from app.services.market_sizing_engine import market_sizing_engine
+            scale_data = get_funding_scale(study.country)
+            if scale_data:
+                study.funding_scale = FundingScale(
+                    country=study.country,
+                    type=scale_data["type"],
+                    source=scale_data["source"],
+                    year=scale_data["year"],
+                    scale_rows=scale_data["scale"],
+                    participation=scale_data["participation"],
+                )
+            # market_sizing est exposé dans le manifest via master_json_builder
+            study._market_sizing = market_sizing_engine.estimate(study)  # type: ignore[attr-defined]
+        except Exception:
+            pass  # pays sans barème défini → pas de slide financement, pas d'invention
         study.sections = [self._build_section_shell(item, metrics) for item in SECTION_REGISTRY]
         _emit(study_id, phase=3, progress=50, eta=90)
 

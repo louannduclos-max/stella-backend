@@ -111,6 +111,18 @@ class QAEngine:
                 "Verdict non calculé",
                 "Exécuter verdict_engine après scoring."))
 
+        # ─── QA Data-Depth : cohérence des nouvelles données enrichies ────────
+        for metric in study.metrics:
+            if metric.national_benchmark is not None and not metric.benchmark_source_id:
+                results.append(self._warn("BENCH_001",
+                    f"Métrique {metric.metric_id} : benchmark sans source_id.",
+                    "Vérifier national_benchmarks.py — chaque valeur doit porter sa source."))
+
+        if study.funding_scale and study.funding_scale.country != study.country:
+            results.append(self._fail("FUND_001",
+                f"Barème de financement ({study.funding_scale.country}) différent du pays de l'étude ({study.country}).",
+                "Ne jamais afficher un barème d'un pays différent de l'étude."))
+
         if not results:
             results.append(self._build_result(
                 test_id="QA_OK",

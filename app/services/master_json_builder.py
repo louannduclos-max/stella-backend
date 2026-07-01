@@ -15,6 +15,19 @@ class MasterJsonBuilder:
         metrics_by_id = {item["metric_id"]: item for item in metrics}
         scores_by_id = {item["score_id"]: item for item in scores}
 
+        # Concurrents nommés — top 10 + total (Chantier 2)
+        competitors_all = [c.model_dump(mode="json") for c in (study.competitors or [])]
+        competitors_top = competitors_all[:10]
+        competitors_total = len(competitors_all)
+
+        # Barème financement (Chantier 3)
+        funding_scale = (
+            study.funding_scale.model_dump(mode="json") if study.funding_scale else None
+        )
+
+        # Market sizing (Chantier 3) — stocké en attribut temporaire par le pipeline
+        market_sizing = getattr(study, "_market_sizing", None)
+
         return {
             "export_name": "stella_master_json",
             "generated_at": datetime.now(UTC).isoformat(),
@@ -64,6 +77,14 @@ class MasterJsonBuilder:
             "narratives": study.narratives or {},
             # Score composite pondéré
             "score_composite": self._compute_composite(study),
+            # ─── Data-Depth sprint ────────────────────────────────────────────
+            # Concurrents nommés Google Places (Chantier 2)
+            "competitors_top": competitors_top,          # jusqu'à 10 acteurs nommés
+            "competitors_total_count": competitors_total,  # nb total identifiés
+            # Barème de financement (Chantier 3) — None si pays non couvert
+            "funding_scale": funding_scale,
+            # Marché adressable estimé (Chantier 3) — None si données insuffisantes
+            "market_sizing": market_sizing,
         }
 
 

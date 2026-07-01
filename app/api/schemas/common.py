@@ -68,6 +68,11 @@ class Metric(BaseModel):
     confidence_grade: ConfidenceGrade
     fallback_used: bool = False
     fallback_note: str | None = None
+    # ─── Benchmark national (Data-Depth sprint) ───────────────────────────────
+    national_benchmark: str | int | float | None = None
+    benchmark_source_id: str | None = None
+    benchmark_year: int | None = None          # traçabilité temporelle
+    benchmark_interpretation: str | None = None  # ex: "1.4× la moyenne nationale"
 
 
 class ScoreDriver(BaseModel):
@@ -131,6 +136,31 @@ class QAResult(BaseModel):
     remediation: str
 
 
+class Competitor(BaseModel):
+    """Acteur concurrentiel nommé, issu de Google Places."""
+    competitor_id: str
+    name: str
+    address: str | None = None
+    city: str | None = None
+    rating: float | None = None
+    reviews_count: int | None = None
+    category: str | None = None
+    distance_min: int | None = None   # minutes voiture (non rempli pour l'instant)
+    is_direct_competitor: bool = False
+    source_id: str
+    confidence_grade: ConfidenceGrade = ConfidenceGrade.B
+
+
+class FundingScale(BaseModel):
+    """Barème de financement (APA en FR, SAAD en ES, etc.)."""
+    country: str
+    type: str
+    source: str
+    year: int
+    scale_rows: list[dict]
+    participation: dict
+
+
 class Study(BaseModel):
     study_id: str
     version: str
@@ -156,5 +186,8 @@ class Study(BaseModel):
     # Sprint 4 Lot C — narratifs LLM (Gemini ou template). Clés : verdict_narrative,
     # exec_summary, competitive_insight, action_30d/60d/90d, opportunity_text, generated_by
     narratives: dict | None = None
+    # Data-Depth sprint — acteurs nommés + barème financement
+    competitors: list[Competitor] = Field(default_factory=list)
+    funding_scale: FundingScale | None = None
     created_at: datetime
     updated_at: datetime

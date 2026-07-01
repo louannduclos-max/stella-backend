@@ -1,4 +1,6 @@
-from app.api.schemas.common import Study
+import uuid
+
+from app.api.schemas.common import Competitor, Study
 from app.core.enums import ConfidenceGrade, FreshnessLevel, GeoLevel, SourceType
 from app.core.score_config import DEFAULT_METRIC_BASELINES
 from app.services.collectors.base import BaseCollector
@@ -61,6 +63,12 @@ class CompetitionCollector(BaseCollector):
             fallback = False
             note = f"Google Places live - {count_15} acteurs à 15 min, {count_30} à 30 min."
             grade = ConfidenceGrade.B
+            # Construire la liste nommée de concurrents (Chantier 2 Data-Depth)
+            brand_profile = study.brand_profile_override or {}
+            direct_names = brand_profile.get("direct_competitors")
+            study.competitors = build_competitors_from_places(
+                live15, direct_competitor_names=direct_names, source_id=src.source_id,
+            )
         else:
             count_15 = DEFAULT_METRIC_BASELINES["competitor_count_15min"]
             count_30 = DEFAULT_METRIC_BASELINES["competitor_count_30min"]
@@ -126,6 +134,49 @@ class CompetitionCollector(BaseCollector):
         places30 = google_places.search_competitors(lat, lon, country, RADIUS_30MIN_M)
         classification = classify_competitors(places15)
         return places15, places30, classification
+
+
+def build_competitors_from_places(
+    places_results: list[dict],
+    direct_competitor_names: list[str] | None = None,
+    source_id: str = "google_places",
+) -> list[Competitor]:
+    """
+    Convertit les résultats bruts Google Places en objets Competitor.
+    - Déduplique par nom normalisé (Places peut renvoyer le même établissement
+      via plusieurs keywords).
+    - Trie : directs d'abord, puis par note décroissante.
+    - N'invente aucune valeur — les champs absents restent None.
+    """
+    direct_names = [d.lower().strip() for d in (direct_competitor_names or [])]
+    seen_names: set[str] = set()
+    competitors: list[Competitor] = []
+
+    for place in places_results:
+        name = place.get("name")
+        if not name:
+            continue
+        key = name.lower().strip()
+        if key in seen_names:
+            continue
+        seen_names.add(key)
+
+        is_direct = any(dc in key for dc in direct_names) if direct_names else False
+
+        competitors.append(Competitor(
+            competitor_id=f"comp_{uuid.uuid4().hex[:8]}",
+            name=name,
+            address=place.get("address") or place.get("vicinity"),
+            rating=place.get("rating"),
+            reviews_count=place.get("user_ratings_total"),
+            category=(place.get("types") or [None])[0],
+            is_direct_competitor=is_direct,
+            source_id=source_id,
+            confidence_grade=ConfidenceGrade.B,
+        ))
+
+    competitors.sort(key=lambda c: (not c.is_direct_competitor, -(c.rating or 0)))
+    return competitors
 
 
 competition_collector = CompetitionCollector()
