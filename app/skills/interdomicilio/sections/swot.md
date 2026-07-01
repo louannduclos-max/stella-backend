@@ -8,7 +8,10 @@ liste de {score_id, label, value, weight, interpretation}
 - Valeur faible → faiblesse / menace
 - `interpretation` : phrase d'interprétation fournie
 
-**RÈGLE** : Ne JAMAIS inventer de bullets SWOT. Utiliser uniquement les `interpretation` du manifest.
+**RÈGLE** : Ne JAMAIS inventer de bullets SWOT.
+- Si `interpretation` est non vide : l'utiliser comme texte du bullet.
+- Si `interpretation` est vide (cas courant) : le bullet est "`label` — `value`/100"
+  (ex. "Potentiel récurrent — 57/100"). Recopie stricte, aucun commentaire ajouté.
 Les scores sont déjà calculés — ne pas recalculer.
 
 ## Layout attendu
@@ -41,8 +44,7 @@ Grille 2x2 (`display: grid; grid-template-columns: 1fr 1fr; gap: 1rem`) :
 
 ## Règles
 
-- **Source unique** : `scores[*].interpretation` — jamais de texte inventé
-- Si `interpretation` est vide pour un score : sauter ce score
+- **Source unique** : `scores.items` (interpretation OU label + value) — jamais de texte inventé
 - Si `scores` vide ou null : afficher un message "Analyse SWOT non disponible"
 - Chaque case : border-radius 8px, padding 1rem, border-left 4px solid couleur
 - Pas de Chart.js

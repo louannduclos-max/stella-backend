@@ -77,6 +77,12 @@ SECTION_DATA_KEYS: dict[str, list[str]] = {
     "employment_talent":    ["metrics"],
     "income_housing":       ["metrics"],
     "methodology_sources":  ["sources"],
+    # Sprint 13d — deck complet 15/15 (dernières sections registry)
+    "market_scorecard":     ["scores", "score_composite", "verdict"],
+    "target_segments":      ["metrics", "market_sizing"],
+    "real_estate":          ["metrics"],
+    "microzones":           ["microzones", "metrics"],
+    "regulation_feasibility": ["metrics", "funding_scale"],
     # Sprint 11 — sections manquantes (TypeError sur fallback dict[:8])
     # "study" EXCLU de geo_analysis : contient created_at/updated_at (datetime) non-sérialisables
     # par json.dumps dans _build_prompt → TypeError → crash worker → "Failed to fetch"
@@ -86,28 +92,19 @@ SECTION_DATA_KEYS: dict[str, list[str]] = {
 
 # maxOutputTokens calibre par section — evite la troncature HTML
 # Les sections avec tableaux/graphiques ont besoin de plus de tokens
+# Sprint 13d — budgets relevés PARTOUT. Constat récurrent (13a/13b/13c) :
+# la seule cause de QA FAIL restante était html_tronque, sur des sections à
+# 3000-4096 tokens (Gemini 2.5-flash écrit des styles inline verbeux).
+# Le coût marginal de tokens de sortie est négligeable versus une slide cassée,
+# et le cache fige désormais la première génération réussie.
 SECTION_MAX_TOKENS: dict[str, int] = {
-    "benchmark_comparison": 4096,
-    # Sprint 13 — 6144 : le QA live a montré html_tronque (div open=5 close=3)
-    # à 4096 sur la slide concurrence ; le tableau Sprint 12 (8 directs + 6
-    # indirects × 5 colonnes) a besoin de marge.
-    "competition_mapping":  6144,
-    "competition":          6144,
-    "funding_feasibility":  3500,
-    # Sprint 13b : html_tronque observe a 4096 (div 17/16) avec narratives ajoutees
-    "executive_summary":    6144,
-    "demographics":         4096,
-    "verdict":              4096,
-    "swot":                 3500,
-    "geo_analysis":         4096,
-    "market_overview":      4096,
-    # Sprint 13b — nouvelles slides
-    "cover":                3000,
-    "employment_talent":    4096,
-    "income_housing":       4096,
-    "methodology_sources":  6144,  # tableau 10 lignes + légende
+    "benchmark_comparison": 8192,
+    "competition_mapping":  8192,
+    "competition":          8192,
+    "methodology_sources":  8192,   # tableaux longs
+    "microzones":           8192,
 }
-_DEFAULT_MAX_TOKENS = 3000
+_DEFAULT_MAX_TOKENS = 6144
 
 
 # Clés de contexte injectées par _prepare_section_data (pipeline) — internes et sûres.
@@ -186,6 +183,9 @@ Règles ABSOLUES :
    ou de placeholder. INTERDIT : "{{valeur}}", "{% for %}", "${valeur}", "[VALEUR]".
    Quand les instructions disent "recopier competition_table.count_total",
    tu écris le nombre lui-même (ex: 32), pas le nom de la variable.
+8. HTML CONCIS : privilégie les classes CSS existantes aux longs styles inline.
+   Ne répète pas un même bloc de styles — factorise via les classes. Le HTML
+   complet doit tenir dans le budget sans être coupé.
 """
 
 def _build_prompt(
