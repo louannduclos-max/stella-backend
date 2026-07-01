@@ -1,4 +1,4 @@
-# Section : Profil démographique
+# Section : Profil démographique <!-- v2 : tokens 4096 + Chart.js -->
 
 ## Données disponibles
 
