@@ -550,6 +550,49 @@ def debug_manifest(study_id: str) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# 7quater. Debug — Sonde classifier concurrence (Sprint 14c)
+# ---------------------------------------------------------------------------
+
+@router.get("/debug/classifier-probe")
+def debug_classifier_probe(study_id: str) -> dict:
+    """
+    Exécute le classifier Gemini sur les concurrents STOCKÉS d'une étude et
+    montre le résultat brut. Preuve directe que le mix code/agent fonctionne
+    (ou raison de l'échec) — sans régénérer l'étude.
+
+    Usage : GET /agents/debug/classifier-probe?study_id=...
+    """
+    from app.agents.competition_classifier_agent import competition_classifier_agent
+    from app.agents.sanitize import sanitize_external_text
+    from app.repositories.studies_repo import studies_repo
+
+    study = studies_repo.get(study_id)
+    if not study:
+        raise HTTPException(404, f"Study '{study_id}' not found")
+
+    comps = study.competitors or []
+    if not comps:
+        return {"study_id": study_id, "error": "aucun concurrent stocké"}
+
+    payload = [
+        {"name": sanitize_external_text(c.name),
+         "types": sanitize_external_text(c.category or "")}
+        for c in comps
+    ]
+    result = competition_classifier_agent.classify(
+        payload, brand_context="aide à domicile senior"
+    )
+    sample = dict(list(result.items())[:5])
+    return {
+        "study_id": study_id,
+        "competitors_sent": len(payload),
+        "classified": len(result),
+        "directs": sum(1 for v in result.values() if v.get("is_direct")),
+        "sample": sample,
+    }
+
+
+# ---------------------------------------------------------------------------
 # 7ter. Debug — Plan de deck (Sprint 14b — composeur par catégories de KPI)
 # ---------------------------------------------------------------------------
 

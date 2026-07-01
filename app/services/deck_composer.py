@@ -170,9 +170,15 @@ def active_sections(manifest: dict, kpi_focus: list[str] | None = None) -> list[
 # du KPI_CATALOG backend. synthesis = sections core, toujours présentes.
 # ─────────────────────────────────────────────────────────────────────────────
 
+# ATTENTION : les clés = les clés RÉELLES de analysis_axes envoyées par le front
+# (wizard-submit.server.ts : demography = market_kpis, hr = hr_kpis, ...).
+# Bug corrigé Sprint 14c : la clé front est "demography", PAS "market" —
+# l'axe démographie/marché coché était perdu (constaté sur l'étude Lyon).
 FRONT_AXES_TO_THEMES: dict[str, list[str]] = {
-    "market":      ["demography", "target_segments", "income_housing",
+    "demography":  ["demography", "target_segments", "income_housing",
                     "real_estate", "business_case"],
+    "market":      ["demography", "target_segments", "income_housing",
+                    "real_estate", "business_case"],  # alias défensif
     "hr":          ["employment"],
     "transport":   ["operations", "microzones"],
     "competition": ["competition"],
@@ -191,8 +197,10 @@ def kpi_focus_from_wizard(wizard_selections: dict | None) -> list[str] | None:
     axes = wizard_selections.get("analysis_axes") or {}
     if not isinstance(axes, dict):
         return None
+    # Comparer sur les clés RÉELLEMENT envoyées par le front (pas sur notre
+    # mapping, qui contient des alias) — Sprint 14c.
     active = [a for a, on in axes.items() if on]
-    inactive = [a for a in FRONT_AXES_TO_THEMES if a not in active and a != "synthesis"]
+    inactive = [a for a, on in axes.items() if not on and a != "synthesis"]
     if not active or not inactive:
         return None  # rien coché ou tout coché = pas de restriction
     themes: list[str] = []

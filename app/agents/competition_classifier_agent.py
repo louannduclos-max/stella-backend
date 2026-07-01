@@ -117,9 +117,15 @@ class CompetitionClassifierAgent:
             "contents": [{"role": "user", "parts": [{"text": prompt}]}],
             "generationConfig": {
                 "temperature": 0.1,
-                "maxOutputTokens": 2048,
+                # Sprint 14c — 2048 était trop court pour 30 acteurs ET les
+                # tokens de thinking de gemini-2.5 se décomptaient du budget
+                # → JSON tronqué → json.loads KO → fallback {} silencieux
+                # → TOUS les domaines en "n.d." (constaté sur l'étude Lyon).
+                "maxOutputTokens": 6144,
             },
         }
+        if "2.5" in (GEMINI_MODEL or ""):
+            body["generationConfig"]["thinkingConfig"] = {"thinkingBudget": 0}
 
         try:
             resp = httpx.post(url, json=body, timeout=_GEMINI_TIMEOUT_S)
@@ -138,7 +144,18 @@ class CompetitionClassifierAgent:
             if raw.endswith("```"):
                 raw = raw[:-3]
 
-            data = json.loads(raw.strip())
+            # Parse défensif : si le JSON est coupé, récupérer jusqu'au dernier
+            # objet complet plutôt que tout perdre.
+            raw = raw.strip()
+            try:
+                data = json.loads(raw)
+            except json.JSONDecodeError:
+                last = raw.rfind("}")
+                candidate = raw[: last + 1]
+                # refermer la structure {"classifications": [ ... ]}
+                if not candidate.rstrip().endswith("]}"):
+                    candidate = candidate + "]}"
+                data = json.loads(candidate)
             result = {}
             for cls in data.get("classifications", []):
                 name = cls.get("name", "")
