@@ -535,6 +535,57 @@ def debug_manifest(study_id: str) -> dict:
     }
 
 
+@router.delete("/debug/clear-slide-cache")
+def clear_slide_cache(study_id: str | None = None) -> dict:
+    """
+    Vide le cache HTML slides dans Supabase sans redeploy.
+
+    - Sans study_id : vide tout le cache (toutes les études)
+    - Avec study_id  : vide uniquement les slides de cette étude
+
+    Usage :
+      DELETE /agents/debug/clear-slide-cache
+      DELETE /agents/debug/clear-slide-cache?study_id=18f460c9-...
+    """
+    import os
+    from supabase import create_client
+
+    url = os.environ.get("SUPABASE_URL")
+    key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
+    if not url or not key:
+        raise HTTPException(500, "Supabase non configuré")
+
+    sb = create_client(url, key)
+    try:
+        if study_id:
+            # Supprime toutes les entrées dont la clé contient l'study_id
+            result = (
+                sb.table("slide_html_cache")
+                .delete()
+                .like("key", f"%{study_id}%")
+                .execute()
+            )
+            deleted = len(result.data) if result.data else 0
+            msg = f"Cache vidé pour study_id={study_id} ({deleted} entrées)"
+        else:
+            # Supprime tout (cle >= vide matche toutes les lignes)
+            result = (
+                sb.table("slide_html_cache")
+                .delete()
+                .gte("key", "")
+                .execute()
+            )
+            deleted = len(result.data) if result.data else 0
+            msg = "Cache global vide ({} entrees)".format(deleted)
+
+        logger.info("[debug/clear-slide-cache] %s", msg)
+        return {"deleted": deleted, "message": msg}
+
+    except Exception as exc:
+        logger.error("[debug/clear-slide-cache] erreur : %s", exc)
+        raise HTTPException(500, str(exc))
+
+
 @router.post("/visual-qa/report", response_model=AgentResponse)
 def submit_visual_qa_report(report: VisualQAReport) -> AgentResponse:
     """
