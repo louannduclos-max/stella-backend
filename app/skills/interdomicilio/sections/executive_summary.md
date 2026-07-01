@@ -25,12 +25,25 @@
 
 ## Layout attendu
 
-1. **Bandeau verdict** (pleine largeur, en haut) :
-   - "GO" → fond vert `#16A34A`, icône `fa-circle-check`
-   - "GO_CONDITIONAL" → fond orange `#EA580C`, icône `fa-triangle-exclamation`
-   - "NO_GO" → fond rouge `#DC2626`, icône `fa-circle-xmark`
-   - null → fond gris, "Verdict en cours d'analyse"
-   - Score composite à droite du bandeau : grand chiffre blanc + "/100"
+1. **Bandeau verdict** (OBLIGATOIRE, pleine largeur, PREMIER élément du main) —
+   utiliser EXACTEMENT ce motif :
+   ```html
+   <div style="display:flex;align-items:center;justify-content:space-between;
+               background:#DC2626;color:#fff;border-radius:8px;
+               padding:12px 20px;margin-bottom:16px">
+     <div style="font-weight:800;font-size:20px">
+       <i class="fa-solid fa-circle-xmark"></i> NO GO
+     </div>
+     <div style="font-weight:800;font-size:26px">43.1<span style="font-size:13px">/100</span></div>
+   </div>
+   ```
+   Adapter fond/icône/texte au verdict réel :
+   - "GO" → fond `#16A34A`, `fa-circle-check`, texte "GO"
+   - "GO_CONDITIONAL" → fond `#EA580C`, `fa-triangle-exclamation`, "GO CONDITIONNEL"
+   - "NO_GO" → fond `#DC2626`, `fa-circle-xmark`, "NO GO"
+   - null → fond `#6B7280`, "Verdict en cours d'analyse", sans score
+   Le score affiché = `score_composite` réel (jamais 43.1 recopié de l'exemple
+   si la valeur diffère).
 
 2. **Ligne de 4 KPI cards** :
    - Card 1 : `market_sizing.addressable_private_market` + label "Clients privés potentiels"

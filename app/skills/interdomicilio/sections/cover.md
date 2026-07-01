@@ -16,6 +16,10 @@
 
 ## Layout attendu (slide d'ouverture — impact visuel maximal)
 
+Envelopper TOUT le contenu dans :
+`<div style="display:flex;flex-direction:column;justify-content:center;align-items:center;height:100%;min-height:520px;text-align:center">`
+— la slide doit être remplie verticalement, pas de gros blanc en bas.
+
 1. **Bloc titre central** (centré verticalement, ~55% de la hauteur) :
    - Sur-titre : "ÉTUDE DE FAISABILITÉ DE MARCHÉ" (lettres espacées,
      `letter-spacing:3px`, uppercase, text_muted, 14px)

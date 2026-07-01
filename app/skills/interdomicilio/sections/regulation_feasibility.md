@@ -22,8 +22,8 @@ Conditions d'entrée :
 ## Règles ABSOLUES anti-invention
 
 - Ces clés sont les SEULES valides. Absent → "n.d.".
-- Badge "estimation" (fond `#FFF7ED`, texte `#EA580C`, 10px) si `fallback_used`
-  true ou grade "C"/"D".
+- Badge estimation : `<span class="badge-estimation">estimation</span>`
+  (classe du template) si `fallback_used` true ou grade "C"/"D".
 - NE PAS calculer d'écart tarif réglementé vs marché — afficher les deux valeurs
   côte à côte, le lecteur voit l'écart.
 - Ne pas qualifier juridiquement ("légal/illégal") — rester factuel.

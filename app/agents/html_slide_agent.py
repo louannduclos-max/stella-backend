@@ -245,6 +245,13 @@ def _call_gemini_html(prompt: str, api_key: str, max_tokens: int = _DEFAULT_MAX_
             "maxOutputTokens": max_tokens,
         },
     }
+    # Sprint 13d — CAUSE RACINE des troncatures aléatoires : les modèles 2.5
+    # "réfléchissent" par défaut et les tokens de thinking se décomptent de
+    # maxOutputTokens. Une consigne complexe → gros thinking → HTML coupé net
+    # (observé : market_scorecard, 59 caractères sur 6144 tokens de budget).
+    # La recopie de valeurs n'a pas besoin de thinking → budget 0.
+    if "2.5" in (GEMINI_MODEL or ""):
+        body["generationConfig"]["thinkingConfig"] = {"thinkingBudget": 0}
     try:
         resp = httpx.post(url, json=body, timeout=_GEMINI_TIMEOUT_S)
         logger.warning("[HTMLSlideAgent] HTTP %s model=%s", resp.status_code, GEMINI_MODEL)

@@ -22,8 +22,9 @@ Chaque métrique porte `confidence_grade` et `fallback_used`.
 ## Règles ABSOLUES anti-invention
 
 - Ces metric_id sont les SEULS valides. Absent → "n.d.".
-- **Badge "estimation"** (fond `#FFF7ED`, texte `#EA580C`, 10px) sur toute card
-  dont la métrique a `fallback_used` true ou grade "C"/"D".
+- **Badge estimation** : `<span class="badge-estimation">estimation</span>`
+  (classe du template) sur toute card dont la métrique a `fallback_used` true
+  ou grade "C"/"D".
 - Aucun calcul (pas de budget mensuel, pas de pouvoir d'achat dérivé).
 
 ## Layout attendu
@@ -34,10 +35,17 @@ Chaque métrique porte `confidence_grade` et `fallback_used`.
    - `avg_hourly_price_care` + "€/h" + "Prix horaire marché" — `fa-clock`
 
 2. **Bloc habitat en 2 colonnes** :
-   - Colonne gauche — "Occupation" : 2 barres horizontales CSS pures (pas de
-     Chart.js) : Propriétaires `home_ownership_share`% (fond primary) et
-     Locataires `tenants_share`% (fond primary_dark), largeur = valeur en %,
-     étiquette valeur au bout de la barre
+   - Colonne gauche — "Occupation" : 2 barres avec EXACTEMENT ce motif
+     (classes du template) :
+     ```html
+     <div class="score-row">
+       <span class="score-label">Propriétaires</span>
+       <div class="bar-track"><div class="bar-fill bar-blue" style="width:56%"></div></div>
+       <span class="score-value">56 %</span>
+     </div>
+     ```
+     Propriétaires = `home_ownership_share` (bar-blue), Locataires =
+     `tenants_share` (bar-orange). Le width = la valeur en %.
    - Colonne droite — "Marché immobilier" : 3 lignes libellé/valeur :
      Maisons `real_estate_price_house_m2` €/m² · Appartements
      `real_estate_price_apartment_m2` €/m² · Loyer `rental_price_m2` €/m²/mois

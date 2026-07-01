@@ -16,8 +16,8 @@ Qui sont les clients potentiels de l'agence, segment par segment.
 ## Règles ABSOLUES anti-invention
 
 - Ces clés sont les SEULES valides. Absent → "n.d.".
-- Badge "estimation" (fond `#FFF7ED`, texte `#EA580C`, 10px) si `fallback_used`
-  true ou grade "C"/"D" sur la métrique.
+- Badge estimation : `<span class="badge-estimation">estimation</span>`
+  (classe du template) si `fallback_used` true ou grade "C"/"D" sur la métrique.
 - Aucun calcul de taille de segment (pas de % × population).
 
 ## Layout attendu

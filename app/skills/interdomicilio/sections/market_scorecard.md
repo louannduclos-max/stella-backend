@@ -20,11 +20,16 @@ Vue synthétique des 7 dimensions d'analyse — la slide "tableau de bord".
 ## Layout attendu
 
 1. **Colonne gauche (~62%) — les 7 barres** :
-   - Une ligne par score : label (Open Sans 600, 14px) puis barre horizontale
-     CSS : conteneur gris clair `#F3F4F6` border-radius 999px hauteur 14px,
-     remplissage `width: {value}%` avec couleur :
-     value ≥ 60 → `#16A34A` / 40-59 → `#EA580C` / < 40 → `#DC2626`
-   - Valeur "{value}/100" en 700 à droite de la barre
+   Une ligne par score, en utilisant EXACTEMENT ce motif (classes du template) :
+   ```html
+   <div class="score-row">
+     <span class="score-label">Potentiel récurrent</span>
+     <div class="bar-track"><div class="bar-fill bar-orange" style="width:57%"></div></div>
+     <span class="score-value">57/100</span>
+   </div>
+   ```
+   Couleur de la barre : value ≥ 60 → `bar-green` / 40-59 → `bar-orange` /
+   < 40 → `bar-red`. Le `width` du bar-fill = la valeur en %.
 
 2. **Colonne droite (~38%) — synthèse** :
    - Grand cercle score composite : `score_composite` en 44px + "/100" en 14px,

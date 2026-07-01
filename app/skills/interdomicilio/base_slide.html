@@ -409,6 +409,61 @@
       border-radius: 2px;
       margin-bottom: 14px;
     }
+
+    /* ── Barres de score/jauge (Sprint 13e) ──────────────────────────
+       Les agents improvisaient les barres en inline → invisibles.
+       Usage : <div class="bar-track"><div class="bar-fill bar-green"
+               style="width:57%"></div></div>                          */
+    .bar-track {
+      background: #F3F4F6;
+      border-radius: 999px;
+      height: 14px;
+      width: 100%;
+      overflow: hidden;
+    }
+    .bar-fill {
+      height: 100%;
+      border-radius: 999px;
+      background: var(--primary);
+      min-width: 6px;
+    }
+    .bar-green  { background: #16A34A; }
+    .bar-orange { background: #EA580C; }
+    .bar-red    { background: #DC2626; }
+    .bar-blue   { background: var(--primary); }
+    .score-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 10px;
+    }
+    .score-row .score-label {
+      width: 220px;
+      flex: none;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+    }
+    .score-row .score-value {
+      width: 64px;
+      flex: none;
+      text-align: right;
+      font-weight: 700;
+      font-size: 13px;
+      color: var(--text);
+    }
+
+    /* ── Badge estimation (honnêteté données C/D) ───────────────────── */
+    .badge-estimation {
+      display: inline-block;
+      background: #FFF7ED;
+      color: #EA580C;
+      font-size: 10px;
+      font-weight: 600;
+      padding: 1px 6px;
+      border-radius: 4px;
+      vertical-align: middle;
+    }
   </style>
 </head>
 <body>

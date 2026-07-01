@@ -17,9 +17,9 @@ clients (un patrimoine élevé = capacité à financer le maintien à domicile).
 ## Règles ABSOLUES anti-invention
 
 - Ces metric_id sont les SEULS valides. Absent → "n.d.".
-- La plupart de ces métriques sont grade "C"/"D" (baselines) → **badge
-  "estimation"** (fond `#FFF7ED`, texte `#EA580C`, 10px) OBLIGATOIRE sur chaque
-  card concernée. C'est le différenciateur honnêteté de Stella.
+- La plupart de ces métriques sont grade "C"/"D" (baselines) → badge
+  `<span class="badge-estimation">estimation</span>` (classe du template)
+  OBLIGATOIRE sur chaque card concernée. C'est le différenciateur honnêteté de Stella.
 - Aucun calcul (pas de rendement locatif, pas de prix moyen combiné).
 
 ## Layout attendu

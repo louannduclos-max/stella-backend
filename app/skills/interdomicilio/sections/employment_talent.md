@@ -15,7 +15,7 @@ cette slide évalue le vivier local.
 
 - Ces 4 metric_id sont les SEULS valides. Absent → "n.d.".
 - **Badge honnêteté obligatoire** : si `fallback_used` est true OU grade "C"/"D",
-  afficher un petit badge "estimation" (fond `#FFF7ED`, texte `#EA580C`, 10px)
+  afficher `<span class="badge-estimation">estimation</span>` (classe du template)
   dans le coin de la card. La transparence fait partie du produit.
 - Aucun calcul (pas de ratio candidats/poste, pas de projection).
 
