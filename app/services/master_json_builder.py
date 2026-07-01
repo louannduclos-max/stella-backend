@@ -1,6 +1,7 @@
 from datetime import UTC, datetime
 
 from app.api.schemas.common import Study
+from app.services.benchmark_engine import benchmark_engine
 from app.services.lovable_config import build_lovable_config
 from app.services.slide_precompute import precompute_slide_values
 
@@ -91,6 +92,14 @@ class MasterJsonBuilder:
         # Sprint 10 — Pré-calcul des valeurs dérivées pour les slides HTML
         # L'agent LLM recopie ces valeurs, il ne calcule jamais.
         # benchmark_rows (gap_display), demographics_pie, scores_radar, competition_avg_rating
+
+        # Enrichissement benchmark national — idempotent (safe même si déjà fait dans le pipeline).
+        # Couvre les études sauvegardées avant le branchement de benchmark_engine dans run_study.py.
+        try:
+            benchmark_engine.enrich_metrics(study.metrics, study.country)
+        except Exception:
+            pass  # jamais bloquant
+
         manifest = precompute_slide_values(study, manifest)
 
         return manifest
